@@ -76,7 +76,7 @@
                             <th>{{ $h['pair'] }}</th>
                             <td data-label="Side"><span class="badge {{ $h['side'] === 'buy' ? 'badge-green' : 'badge-red' }}">{{ strtoupper($h['side']) }}</span></td>
                             <td data-label="Setup">{{ $h['setup'] }}</td>
-                            <td data-label="Price" class="mono">{{ $h['price'] }}</td>
+                            <td data-label="Price" class="mono" data-live-pair="{{ $h['pair'] }}">{{ $h['price'] }}</td>
                             <td data-label="Action">
                                 <a class="btn btn-sm" href="{{ route('plans.index', ['pair' => $h['pair'], 'side' => $h['side'], 'setup' => $h['setup'], 'entry_price' => $h['price']]) }}">Plan</a>
                             </td>

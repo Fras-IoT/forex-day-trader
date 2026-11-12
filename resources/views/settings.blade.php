@@ -12,7 +12,7 @@
             <div class="form-row">
                 <div>
                     <label for="gemini_api_key">Gemini API Token (Access Key)</label>
-                    <input id="gemini_api_key" name="gemini_api_key" type="password" placeholder="{{ $maskedKey ? 'Tersimpan: ' . $maskedKey : 'Paste AIza... token di sini' }}">
+                    <input id="gemini_api_key" name="gemini_api_key" type="password" placeholder="{{ $maskedKey ? 'Token tersimpan (tersembunyi)' : 'Masukkan token di sini' }}">
                 </div>
                 <div>
                     <label for="gemini_model">Gemini Model</label>
@@ -85,7 +85,7 @@
             <li><strong>Database:</strong> MongoDB (<code>{{ config('database.connections.mongodb.database') }}</code>)</li>
             <li><strong>Gemini AI:</strong>
                 @if($geminiConfigured)
-                    <span class="badge badge-green">Token Terpasang ({{ $maskedKey }})</span>
+                    <span class="badge badge-green">Token Terpasang</span>
                 @else
                     <span class="badge badge-amber">Belum Diisi</span>
                 @endif

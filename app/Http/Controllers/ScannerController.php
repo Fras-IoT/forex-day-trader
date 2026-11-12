@@ -61,5 +61,16 @@ class ScannerController extends Controller
 
         return redirect()->route('scanner.index')->with('status', 'Analisis Gemini AI untuk hasil scan diperbarui.');
     }
+
+    public function livePrices(Request $request, ForexMarketService $market)
+    {
+        $pairsParam = $request->query('pairs');
+        $pairs = $pairsParam ? array_filter(array_map('trim', explode(',', (string) $pairsParam))) : null;
+
+        return response()->json([
+            'quotes' => $market->getLiveQuotes($pairs),
+            'server_time' => now()->setTimezone('Asia/Jakarta')->format('H:i:s') . ' WIB',
+        ]);
+    }
 }
 

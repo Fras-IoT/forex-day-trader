@@ -5,8 +5,8 @@
 <div class="card" style="margin-bottom: 1rem;">
     <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.75rem;">
         <div>
-            <h2 style="margin:0;">Forex Chart Scanner</h2>
-            <div class="muted">Memindai 11 pair Forex (Session Range Breakout, 20D Breakout, RSI Bounce, MA20 Reclaim).</div>
+            <h2 style="margin:0;">Forex Chart Scanner <span id="live-price-status" class="badge badge-green" style="font-size:0.72rem; margin-left:0.4rem;">Live 5s</span></h2>
+            <div class="muted">Memindai 11 pair Forex (Asian/Session Range Breakout, 20D Breakout, EMA 50/200 Trend, RSI Bounce, MA20 Reclaim).</div>
         </div>
         <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
             <form method="POST" action="{{ route('scanner.run') }}">
@@ -44,8 +44,9 @@
                         <th>Pair</th>
                         <th>Side</th>
                         <th>Setup</th>
+                        <th>EMA Trend</th>
                         <th>Price</th>
-                        <th>Change</th>
+                        <th>Asian/Sess Range</th>
                         <th>RSI(14)</th>
                         <th>ATR (pips)</th>
                         <th>Score</th>
@@ -58,8 +59,12 @@
                         <th>{{ $h['pair'] }}</th>
                         <td data-label="Side"><span class="badge {{ $h['side'] === 'buy' ? 'badge-green' : 'badge-red' }}">{{ strtoupper($h['side']) }}</span></td>
                         <td data-label="Setup">{{ $h['setup'] }}</td>
-                        <td data-label="Price" class="mono">{{ $h['price'] }}</td>
-                        <td data-label="Change" class="mono">{{ $h['change_pct'] }}%</td>
+                        <td data-label="EMA Trend">
+                            @php $tb = $h['trend_bias'] ?? 'Neutral'; @endphp
+                            <span class="badge {{ $tb === 'Bullish' ? 'badge-green' : ($tb === 'Bearish' ? 'badge-red' : '') }}">{{ $tb }}</span>
+                        </td>
+                        <td data-label="Price" class="mono" data-live-pair="{{ $h['pair'] }}">{{ $h['price'] }}</td>
+                        <td data-label="Range" class="mono">{{ $h['range_low'] ?? '-' }} – {{ $h['range_high'] ?? '-' }}</td>
                         <td data-label="RSI(14)" class="mono">{{ $h['rsi14'] }}</td>
                         <td data-label="ATR" class="mono">{{ $h['atr_pips'] }}</td>
                         <td data-label="Score" class="mono"><strong>{{ $h['score'] }}</strong></td>

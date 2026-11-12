@@ -125,8 +125,26 @@ class GeminiService
         }
 
         $chunks = [];
-        $outputs = $data['outputs'] ?? [];
-        foreach ($outputs as $output) {
+
+        // v1 Interactions API returns `steps` with `type: "model_output"`
+        foreach (($data['steps'] ?? []) as $step) {
+            if (($step['type'] ?? '') !== 'model_output') {
+                continue;
+            }
+            if (isset($step['text']) && is_string($step['text'])) {
+                $chunks[] = $step['text'];
+            }
+            if (!empty($step['content']) && is_array($step['content'])) {
+                foreach ($step['content'] as $part) {
+                    if (($part['type'] ?? '') === 'text' && isset($part['text'])) {
+                        $chunks[] = $part['text'];
+                    }
+                }
+            }
+        }
+
+        // Fallback for `outputs` schema if present
+        foreach (($data['outputs'] ?? []) as $output) {
             if (($output['type'] ?? '') === 'text' && isset($output['text'])) {
                 $chunks[] = $output['text'];
             }

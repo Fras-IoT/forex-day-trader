@@ -41,13 +41,14 @@
                 <div>
                     <label for="stop_rule">Stop Loss Rule</label>
                     <select id="stop_rule" name="stop_rule">
-                        <option value="pips">Fixed Pips (default 20 pips)</option>
+                        <option value="atr">Auto ATR(14) Multiplier (e.g. 1.5x ATR)</option>
+                        <option value="pips">Fixed Pips (e.g. 20 pips)</option>
                         <option value="price">Exact Price</option>
                     </select>
                 </div>
                 <div>
-                    <label for="stop_value">Stop Value (pips atau harga)</label>
-                    <input id="stop_value" name="stop_value" type="number" step="any" value="20">
+                    <label for="stop_value">Stop Value (ATR mult / pips / harga)</label>
+                    <input id="stop_value" name="stop_value" type="number" step="any" value="1.5">
                 </div>
             </div>
 

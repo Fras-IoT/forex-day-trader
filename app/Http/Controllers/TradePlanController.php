@@ -45,18 +45,26 @@ class TradePlanController extends Controller
 
         $meta = $market->getPairMeta($data['pair']);
         $latest = $market->getLatestPrice($meta['pair']);
-        $entry = $data['entry_price'] ? (float) $data['entry_price'] : (float) $latest['price'];
+        $entry = !empty($data['entry_price']) ? (float) $data['entry_price'] : (float) $latest['price'];
         $isBuy = $data['side'] === 'buy';
         $pip = $meta['pip'];
 
         // Calculate Stop Loss
-        $stop = match ($data['stop_rule']) {
-            'pips' => $isBuy
+        if ($data['stop_rule'] === 'atr') {
+            $mult = max(0.5, (float) ($data['stop_value'] ?? 1.5));
+            $bars = $market->fetchBars($meta['pair'], '5m', '5d')['bars'];
+            $atr = $this->computeAtr($bars, 14);
+            $dist = max(5 * $pip, $atr * $mult);
+            $stop = $isBuy ? $entry - $dist : $entry + $dist;
+        } elseif ($data['stop_rule'] === 'pips') {
+            $stop = $isBuy
                 ? $entry - (max(5, (float) ($data['stop_value'] ?? 20)) * $pip)
-                : $entry + (max(5, (float) ($data['stop_value'] ?? 20)) * $pip),
-            'price' => (float) ($data['stop_value'] ?? ($isBuy ? $entry - 20 * $pip : $entry + 20 * $pip)),
-            default => $isBuy ? $entry - (20 * $pip) : $entry + (20 * $pip),
-        };
+                : $entry + (max(5, (float) ($data['stop_value'] ?? 20)) * $pip);
+        } elseif ($data['stop_rule'] === 'price') {
+            $stop = (float) ($data['stop_value'] ?? ($isBuy ? $entry - 20 * $pip : $entry + 20 * $pip));
+        } else {
+            $stop = $isBuy ? $entry - (20 * $pip) : $entry + (20 * $pip);
+        }
 
         $riskDiff = abs($entry - $stop);
         if ($riskDiff <= 0) {
@@ -125,6 +133,24 @@ class TradePlanController extends Controller
         $plan->save();
 
         return redirect()->route('plans.index')->with('status', "Analisis Gemini AI untuk plan {$plan->pair} selesai.");
+    }
+
+    private function computeAtr(array $bars, int $period = 14): float
+    {
+        $n = count($bars);
+        if ($n < 2) {
+            return 0.0;
+        }
+        $trs = [];
+        $start = max(1, $n - $period);
+        for ($i = $start; $i < $n; $i++) {
+            $h = $bars[$i]['h'];
+            $l = $bars[$i]['l'];
+            $pc = $bars[$i - 1]['c'];
+            $trs[] = max($h - $l, abs($h - $pc), abs($l - $pc));
+        }
+
+        return count($trs) > 0 ? array_sum($trs) / count($trs) : 0.0;
     }
 }
 

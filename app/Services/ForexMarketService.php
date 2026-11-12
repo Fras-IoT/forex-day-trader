@@ -119,6 +119,59 @@ class ForexMarketService
         ];
     }
 
+    /**
+     * Fetch near-real-time quotes for all or selected Forex pairs (5s cache).
+     */
+    public function getLiveQuotes(?array $pairs = null): array
+    {
+        $targets = $pairs ?: array_keys(self::PAIRS);
+        $quotes = [];
+
+        foreach ($targets as $pair) {
+            $meta = $this->getPairMeta($pair);
+            $cacheKey = "fx_live_quote_{$meta['yahoo']}";
+
+            $quotes[$meta['pair']] = Cache::remember($cacheKey, 5, function () use ($meta) {
+                foreach (['https://query2.finance.yahoo.com', 'https://query1.finance.yahoo.com'] as $host) {
+                    try {
+                        $resp = Http::timeout(3)
+                            ->withHeaders(['User-Agent' => 'Mozilla/5.0 (compatible; ForexDayTraderAI/1.0)'])
+                            ->get("{$host}/v8/finance/chart/{$meta['yahoo']}", [
+                                'range' => '1d',
+                                'interval' => '1m',
+                            ]);
+
+                        if ($resp->ok()) {
+                            $result = $resp->json()['chart']['result'][0] ?? null;
+                            $mktPrice = $result['meta']['regularMarketPrice'] ?? null;
+                            if ($mktPrice !== null && is_numeric($mktPrice)) {
+                                return [
+                                    'price' => round((float) $mktPrice, $meta['decimals']),
+                                    'decimals' => $meta['decimals'],
+                                    'source' => 'yahoo_live',
+                                    'updated_at' => gmdate('H:i:s') . ' UTC',
+                                ];
+                            }
+                        }
+                    } catch (\Throwable $e) {
+                        // Fall through
+                    }
+                }
+
+                $fallback = $this->getLatestPrice($meta['pair']);
+
+                return [
+                    'price' => $fallback['price'],
+                    'decimals' => $meta['decimals'],
+                    'source' => $fallback['source'],
+                    'updated_at' => gmdate('H:i:s') . ' UTC',
+                ];
+            });
+        }
+
+        return $quotes;
+    }
+
     public function pipValuePerStandardLot(string $pair, float $price): float
     {
         $meta = $this->getPairMeta($pair);

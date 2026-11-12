@@ -100,7 +100,7 @@
                         <td data-label="Side"><span class="badge {{ $o->side === 'buy' ? 'badge-green' : 'badge-red' }}">{{ strtoupper($o->side) }}</span></td>
                         <td data-label="Lots" class="mono">{{ $o->lots }}</td>
                         <td data-label="Entry" class="mono">{{ $o->entry_price }}</td>
-                        <td data-label="Current" class="mono">{{ $livePrices[$o->pair] ?? $o->entry_price }}</td>
+                        <td data-label="Current" class="mono" data-live-pair="{{ $o->pair }}">{{ $livePrices[$o->pair] ?? $o->entry_price }}</td>
                         <td data-label="SL/TP" class="mono">{{ $o->stop_loss }} / {{ $o->take_profit }}</td>
                         <td data-label="Action">
                             <form method="POST" action="{{ route('broker.close', (string)$o->_id) }}">

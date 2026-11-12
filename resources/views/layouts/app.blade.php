@@ -287,10 +287,6 @@
     <div class="brand">
         <span>FX</span>
         <span>Forex Day Trader AI</span>
-        <span class="badge badge-brand">MongoDB</span>
-        <span class="badge {{ ($geminiConfigured ?? true) ? 'badge-green' : 'badge-amber' }}">
-            Gemini {{ ($geminiConfigured ?? true) ? 'Ready' : 'No Token' }}
-        </span>
     </div>
     <nav class="nav" aria-label="Main navigation">
         <a href="{{ route('dashboard') }}" class="{{ request()->routeIs('dashboard') ? 'active' : '' }}">Dashboard</a>
@@ -301,7 +297,12 @@
         <a href="{{ route('broker.index') }}" class="{{ request()->routeIs('broker.*') ? 'active' : '' }}">Risk & Broker</a>
         <a href="{{ route('alerts.index') }}" class="{{ request()->routeIs('alerts.*') ? 'active' : '' }}">Alerts</a>
         <a href="{{ route('copilot.index') }}" class="{{ request()->routeIs('copilot.*') ? 'active' : '' }}">Gemini Copilot</a>
+        <a href="{{ route('accounts.index') }}" class="{{ request()->routeIs('accounts.*') ? 'active' : '' }}">Akun</a>
         <a href="{{ route('settings.index') }}" class="{{ request()->routeIs('settings.*') ? 'active' : '' }}">Settings</a>
+        <form method="POST" action="{{ route('logout') }}" style="display:inline;">
+            @csrf
+            <button type="submit" class="btn btn-sm" style="margin-left:0.25rem;">Logout</button>
+        </form>
     </nav>
 </header>
 
@@ -312,6 +313,15 @@
     @if(session('error'))
         <div class="alert-banner alert-err">{{ session('error') }}</div>
     @endif
+    @if($errors->any())
+        <div class="alert-banner alert-err">
+            <ul style="margin:0; padding-left:1.2rem;">
+                @foreach($errors->all() as $err)
+                    <li>{{ $err }}</li>
+                @endforeach
+            </ul>
+        </div>
+    @endif
 
     @yield('content')
 </main>
@@ -319,6 +329,49 @@
 <footer>
     <strong>Disclaimer:</strong> Bukan nasihat keuangan (Not financial advice). Paper trading aktif secara default. Tidak ada order yang dieksekusi tanpa konfirmasi eksplisit Anda. Terinspirasi dari <code>day-trader-skill</code>, diadaptasi untuk Forex + Gemini AI + Laravel + MongoDB.
 </footer>
+
+<script>
+(() => {
+    const els = Array.from(document.querySelectorAll('[data-live-pair]'));
+    if (!els.length) return;
+
+    const pairs = [...new Set(els.map(el => el.dataset.livePair))];
+    const statusEl = document.getElementById('live-price-status');
+
+    async function refreshPrices() {
+        try {
+            const res = await fetch('/live-prices?pairs=' + encodeURIComponent(pairs.join(',')), {
+                headers: { 'Accept': 'application/json' }
+            });
+            if (!res.ok) return;
+            const data = await res.json();
+            const quotes = data.quotes || {};
+
+            for (const el of els) {
+                const q = quotes[el.dataset.livePair];
+                if (!q) continue;
+                const oldVal = parseFloat(el.textContent);
+                const newVal = Number(q.price);
+                const formatted = newVal.toFixed(q.decimals ?? 5);
+
+                if (!Number.isNaN(oldVal) && newVal !== oldVal) {
+                    el.style.color = newVal > oldVal ? 'var(--green)' : 'var(--red)';
+                    el.style.fontWeight = '700';
+                    setTimeout(() => { el.style.color = ''; }, 1400);
+                }
+                el.textContent = formatted;
+            }
+            if (statusEl && data.server_time) {
+                statusEl.textContent = 'Live (' + data.server_time + ')';
+            }
+        } catch (_) {
+            // Silent retry on next tick
+        }
+    }
+
+    setInterval(refreshPrices, 5000);
+})();
+</script>
 </body>
 </html>
 
