@@ -47,7 +47,7 @@
                             <span class="mono">@ {{ $ord->entry_price }}</span>
                         </div>
                         <button type="button" class="btn btn-primary btn-sm" onclick="document.getElementById('confirm-dialog-{{ (string)$ord->_id }}').showModal()">
-                            Approve &amp; Execute (Paper)
+                            Approve &amp; Eksekusi ke MT5
                         </button>
                     </div>
                     <div class="muted mono" style="margin-top:0.35rem;">
@@ -59,8 +59,8 @@
 
                     <!-- Native modal dialog per modern-web-guidance -->
                     <dialog id="confirm-dialog-{{ (string)$ord->_id }}" aria-labelledby="dlg-title-{{ (string)$ord->_id }}">
-                        <h3 id="dlg-title-{{ (string)$ord->_id }}">Konfirmasi Eksekusi Paper Order</h3>
-                        <p>Anda akan mengeksekusi order berikut di akun <strong>{{ $ord->paper ? 'PAPER' : 'LIVE' }}</strong>:</p>
+                        <h3 id="dlg-title-{{ (string)$ord->_id }}">Konfirmasi Eksekusi Order (Web &amp; MT5)</h3>
+                        <p>Anda akan menyetujui order ini. Robot MT5 akan langsung membuka posisi di MT5 sesuai spesifikasi berikut:</p>
                         <ul class="mono" style="font-size:0.88rem;">
                             <li>Pair: {{ $ord->pair }} ({{ strtoupper($ord->side) }})</li>
                             <li>Size: {{ $ord->lots }} lot ({{ number_format($ord->units) }} units)</li>
@@ -74,7 +74,7 @@
                             <form method="POST" action="{{ route('broker.execute', (string)$ord->_id) }}">
                                 @csrf
                                 <input type="hidden" name="confirm_yes" value="YES">
-                                <button class="btn btn-primary" type="submit">Ya, Eksekusi Order</button>
+                                <button class="btn btn-primary" type="submit">Ya, Eksekusi ke MT5</button>
                             </form>
                         </div>
                     </dialog>

@@ -2,12 +2,14 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Mt5Order;
 use App\Models\PaperOrder;
 use App\Models\PriceAlert;
 use App\Models\TradePlan;
 use App\Models\TraderSetting;
 use App\Services\ForexMarketService;
 use App\Services\ForexRiskService;
+use App\Services\TelegramService;
 use Illuminate\Http\Request;
 
 class RiskBrokerController extends Controller
@@ -92,7 +94,7 @@ class RiskBrokerController extends Controller
             ->with($order->risk_status === 'PASS' ? 'status' : 'error', $msg);
     }
 
-    public function execute(string $id, Request $request)
+    public function execute(string $id, Request $request, TelegramService $telegram)
     {
         $order = PaperOrder::findOrFail($id);
 
@@ -126,8 +128,37 @@ class RiskBrokerController extends Controller
             'status' => 'active',
         ]);
 
+        // Metode 1: Sinkronkan langsung ke MT5 EA dengan status 'approved'
+        $mt5Symbol = str_replace(['/', ' '], '', (string) $order->pair);
+        $mt5Order = Mt5Order::create([
+            'pair' => $order->pair,
+            'mt5_symbol' => $mt5Symbol,
+            'side' => $order->side,
+            'lots' => (float) $order->lots,
+            'entry_price' => (float) $order->entry_price,
+            'stop_loss' => (float) $order->stop_loss,
+            'take_profit' => (float) $order->take_profit,
+            'setup' => 'Web App Manual Approval',
+            'score' => 100,
+            'expected_r' => (float) ($order->reward_risk ?? 1.5),
+            'target_first_pct' => 50.0,
+            'status' => 'approved',
+            'approved_at' => now(),
+            'expires_at' => now()->addMinutes(15),
+        ]);
+
+        if ($telegram->isConfigured()) {
+            $telegram->sendMessage(
+                "🌐 <b>ORDER DISETUJUI DARI APLIKASI WEB</b>\n"
+                . "Pair: <b>{$order->pair} (" . strtoupper($order->side) . ")</b>\n"
+                . "Lots: <code>{$order->lots}</code> | Entry: <code>{$order->entry_price}</code>\n"
+                . "SL: <code>{$order->stop_loss}</code> | TP: <code>{$order->take_profit}</code>\n"
+                . "Status: <b>Diteruskan ke Robot MT5 (Akan open otomatis)</b>"
+            );
+        }
+
         return redirect()->route('broker.index')
-            ->with('status', "Paper Order DIEKSEKUSI: " . strtoupper($order->side) . " {$order->lots} lot {$order->pair} @ {$order->entry_price}. Alert SL/TP otomatis dibuat.");
+            ->with('status', "Order DISETUJUI: " . strtoupper($order->side) . " {$order->lots} lot {$order->pair} @ {$order->entry_price}. Posisi diteruskan ke Robot MT5 & Alert SL/TP aktif.");
     }
 
     public function close(string $id, ForexMarketService $market)
