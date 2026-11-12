@@ -33,6 +33,11 @@ class ForexAutoMonitorService
             'errors' => [],
         ];
 
+        $sessions = $this->market->getActiveSessions();
+        if (!$forceScan && !($sessions['market_open'] ?? true)) {
+            return $summary;
+        }
+
         $this->checkOpenPositions($settings, $summary);
 
         if ($forceScan || ($settings->auto_scan_enabled ?? true)) {
@@ -49,7 +54,7 @@ class ForexAutoMonitorService
 
         foreach ($openOrders as $order) {
             try {
-                $latest = $this->market->getLatestPrice($order->pair);
+                $latest = $this->market->getLatestPrice($order->pair, true);
                 $price = (float) ($latest['price'] ?? 0);
                 if ($price <= 0) {
                     continue;
@@ -128,15 +133,25 @@ class ForexAutoMonitorService
         $scan = $this->scanner->scanAll('intraday');
 
         foreach (($scan->hits ?? []) as $hit) {
-            if (($hit['score'] ?? 0) < $minScore) {
+            if (($hit['score'] ?? 0) <= $minScore) {
                 continue;
             }
 
             $pair = $hit['pair'];
             $side = $hit['side'];
+            $cooldownKey = "tg_scan_alert_{$pair}_{$side}";
+            if (Cache::has($cooldownKey)) {
+                continue;
+            }
+
             $meta = $this->market->getPairMeta($pair);
             $decimals = (int) ($hit['decimals'] ?? $meta['decimals']);
-            $entry = (float) $hit['price'];
+
+            // Fetch Twelve Data Spot price only for pairs with score > 70 (and not in cooldown)
+            $spot = $this->market->getLatestPrice($pair, true);
+            $entry = (float) ($spot['price'] ?? $hit['price']);
+            $priceSource = $spot['source'] ?? 'yahoo_live';
+
             $atrPrice = max($meta['pip'] * 5, ((float) ($hit['atr_pips'] ?? 10)) * $meta['pip']);
             $risk = $atrPrice * 1.5;
 
@@ -148,14 +163,9 @@ class ForexAutoMonitorService
                 : round($entry - ($risk * $rr), $decimals);
 
             $summary['scan_hits_evaluated']++;
-            $mc = $this->timeMachine->quickEvaluate($pair, $side, $entry, $stop, $target, 2500, 19);
+            $mc = $this->timeMachine->quickEvaluate($pair, $side, $entry, $stop, $target, 2500, 19, true);
 
             if ($mc['target_first_pct'] <= $minProb) {
-                continue;
-            }
-
-            $cooldownKey = "tg_scan_alert_{$pair}_{$side}";
-            if (!Cache::add($cooldownKey, true, now()->addMinutes(60))) {
                 continue;
             }
 
@@ -165,10 +175,11 @@ class ForexAutoMonitorService
                     . "Scanner Score: <b>{$hit['score']}/99</b> | Trend: {$hit['trend_bias']}\n"
                     . "Monte Carlo Target First: <b>{$mc['target_first_pct']}%</b> (Expected: {$mc['expected_r']}R)\n"
                     . "Entry: <code>{$entry}</code> | SL: <code>{$stop}</code> | TP: <code>{$target}</code>\n"
-                    . "<i>Sesi: {$scan->session}</i>";
+                    . "<i>Sesi: {$scan->session} | Feed: {$priceSource}</i>";
 
                 $sent = $this->telegram->sendMessage($msg);
                 if ($sent['ok']) {
+                    Cache::put($cooldownKey, true, now()->addMinutes(60));
                     $summary['alerts_sent']++;
                 } elseif ($sent['error']) {
                     $summary['errors'][] = $sent['error'];

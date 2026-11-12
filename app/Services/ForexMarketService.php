@@ -62,16 +62,18 @@ class ForexMarketService
      *
      * @return array{source: string, bars: array<int, array{t: int, o: float, h: float, l: float, c: float}>}
      */
-    public function fetchBars(string $pair, string $interval = '5m', string $range = '30d'): array
+    public function fetchBars(string $pair, string $interval = '5m', string $range = '30d', bool $preferSpot = false): array
     {
         $meta = $this->getPairMeta($pair);
-        $tdKey = $this->resolvedTwelveDataKey();
-        $modeTag = $tdKey !== '' ? 'td' : 'yh';
+        $useSpot = $preferSpot || $meta['pair'] === 'XAU/USD';
+        $tdKey = $useSpot ? $this->resolvedTwelveDataKey() : '';
+        $useTd = $tdKey !== '';
+        $modeTag = $useTd ? 'td' : 'yh';
         $cacheKey = "fx_bars_{$modeTag}_{$meta['yahoo']}_{$interval}_{$range}";
-        $ttl = $interval === '1d' ? 1800 : 300;
+        $ttl = $interval === '1d' ? 21600 : 900;
 
-        return Cache::remember($cacheKey, $ttl, function () use ($meta, $interval, $range, $tdKey) {
-            if ($tdKey !== '' && !Cache::get('twelvedata_cooldown')) {
+        return Cache::remember($cacheKey, $ttl, function () use ($meta, $interval, $range, $tdKey, $useTd) {
+            if ($useTd && !Cache::get('twelvedata_cooldown')) {
                 $tdBars = $this->fetchTwelveDataBars($meta, $interval, $range, $tdKey);
                 if ($tdBars !== null) {
                     return ['source' => 'twelvedata_spot', 'bars' => $tdBars];
@@ -113,10 +115,27 @@ class ForexMarketService
         });
     }
 
-    public function getLatestPrice(string $pair): array
+    public function getLatestPrice(string $pair, bool $preferSpot = false): array
     {
         $meta = $this->getPairMeta($pair);
-        $data = $this->fetchBars($meta['pair'], '5m', '5d');
+        $useSpot = $preferSpot || $meta['pair'] === 'XAU/USD';
+        if ($useSpot) {
+            $tdKey = $this->resolvedTwelveDataKey();
+            if ($tdKey !== '' && !Cache::get('twelvedata_cooldown')) {
+                $tdQuotes = $this->fetchTwelveDataBatchQuotes([$meta['pair']], $tdKey);
+                if (isset($tdQuotes[$meta['pair']])) {
+                    return [
+                        'pair' => $meta['pair'],
+                        'price' => $tdQuotes[$meta['pair']]['price'],
+                        'prev_close' => $tdQuotes[$meta['pair']]['price'],
+                        'source' => 'twelvedata_spot',
+                        'timestamp' => time(),
+                    ];
+                }
+            }
+        }
+
+        $data = $this->fetchBars($meta['pair'], '5m', '5d', $useSpot);
         $bars = $data['bars'];
         $last = end($bars);
         $prev = count($bars) > 1 ? $bars[count($bars) - 2] : $last;
@@ -131,18 +150,22 @@ class ForexMarketService
     }
 
     /**
-     * Fetch near-real-time quotes for all or selected Forex pairs (5s cache).
+     * Fetch near-real-time quotes for all or selected Forex pairs (5s cache, Yahoo Finance to save Twelve Data quota).
      */
     public function getLiveQuotes(?array $pairs = null): array
     {
         $targets = $pairs ?: array_keys(self::PAIRS);
         $quotes = [];
-        $tdKey = $this->resolvedTwelveDataKey();
 
-        if ($tdKey !== '' && !Cache::get('twelvedata_cooldown')) {
-            $tdQuotes = $this->fetchTwelveDataBatchQuotes($targets, $tdKey);
-            if (!empty($tdQuotes)) {
-                $quotes = $tdQuotes;
+        // Always fetch XAU/USD Spot from Twelve Data (1 credit, cached 90s) so Gold matches Finex Spot
+        $hasGold = in_array('XAU/USD', array_map(fn ($p) => $this->getPairMeta($p)['pair'], $targets), true);
+        if ($hasGold) {
+            $tdKey = $this->resolvedTwelveDataKey();
+            if ($tdKey !== '' && !Cache::get('twelvedata_cooldown')) {
+                $tdQuotes = $this->fetchTwelveDataBatchQuotes(['XAU/USD'], $tdKey);
+                if (isset($tdQuotes['XAU/USD'])) {
+                    $quotes['XAU/USD'] = $tdQuotes['XAU/USD'];
+                }
             }
         }
 
@@ -279,10 +302,13 @@ class ForexMarketService
     private function fetchTwelveDataBatchQuotes(array $targets, string $apiKey): array
     {
         $normalized = array_values(array_unique(array_map(fn ($p) => $this->getPairMeta($p)['pair'], $targets)));
+        if (empty($normalized)) {
+            return [];
+        }
         sort($normalized);
         $cacheKey = 'fx_td_batch_' . md5(implode(',', $normalized));
 
-        return Cache::remember($cacheKey, 60, function () use ($normalized, $apiKey) {
+        return Cache::remember($cacheKey, 90, function () use ($normalized, $apiKey) {
             try {
                 $resp = Http::timeout(6)->get('https://api.twelvedata.com/price', [
                     'symbol' => implode(',', $normalized),

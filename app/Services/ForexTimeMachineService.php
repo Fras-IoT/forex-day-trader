@@ -29,7 +29,8 @@ class ForexTimeMachineService
             (float) $plan->take_profit,
             $replays,
             $seed,
-            $horizonBars
+            $horizonBars,
+            true
         );
 
         $histStats = $this->runHistoricalRuleCheck($computed['sessions'], $plan, $computed['risk']);
@@ -53,9 +54,10 @@ class ForexTimeMachineService
         float $stop,
         float $target,
         int $replays = 2500,
-        int $seed = 19
+        int $seed = 19,
+        bool $preferSpot = true
     ): array {
-        $computed = $this->computeSimulation($pair, $side, $entry, $stop, $target, $replays, $seed, 72);
+        $computed = $this->computeSimulation($pair, $side, $entry, $stop, $target, $replays, $seed, 72, $preferSpot);
         $rec = $computed['record'];
 
         return [
@@ -74,10 +76,11 @@ class ForexTimeMachineService
         float $target,
         int $replays,
         int $seed,
-        int $horizonBars
+        int $horizonBars,
+        bool $preferSpot = false
     ): array {
         $meta = $this->market->getPairMeta($pair);
-        $data = $this->market->fetchBars($pair, '5m', '30d');
+        $data = $this->market->fetchBars($pair, '5m', '30d', $preferSpot);
         $bars = $data['bars'];
 
         $isBuy = $side === 'buy';
