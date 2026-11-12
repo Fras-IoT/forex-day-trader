@@ -30,6 +30,7 @@ class TraderSetting extends Model
         'auto_scan_min_score',
         'auto_scan_min_prob',
         'auto_close_on_hit',
+        'twelve_data_api_key',
     ];
 
     public static function current(): self
@@ -60,6 +61,7 @@ class TraderSetting extends Model
             'auto_scan_min_score' => 70,
             'auto_scan_min_prob' => 55,
             'auto_close_on_hit' => true,
+            'twelve_data_api_key' => '',
         ]);
     }
 
@@ -91,6 +93,16 @@ class TraderSetting extends Model
         }
 
         return trim((string) config('services.telegram.chat_id', ''));
+    }
+
+    public function resolvedTwelveDataKey(): string
+    {
+        $dbKey = trim((string) ($this->twelve_data_api_key ?? ''));
+        if ($dbKey !== '') {
+            return $dbKey;
+        }
+
+        return trim((string) config('services.twelvedata.api_key', ''));
     }
 }
 

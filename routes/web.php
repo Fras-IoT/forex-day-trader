@@ -22,6 +22,7 @@ Route::middleware('auth')->group(function () {
 
     Route::prefix('scanner')->name('scanner.')->group(function () {
         Route::get('/', [ScannerController::class, 'index'])->name('index');
+        Route::get('/run', fn () => redirect()->route('scanner.index'));
         Route::post('/run', [ScannerController::class, 'run'])->name('run');
         Route::post('/analyze', [ScannerController::class, 'analyze'])->name('analyze');
     });

@@ -76,6 +76,13 @@
             </div>
 
             <hr style="border:0; border-top:1px solid var(--border); margin:1rem 0;">
+            <h3 style="margin-top:0;">Sumber Harga Spot (Twelve Data — Mendekati MT5 Finex)</h3>
+            <div style="margin-bottom:0.85rem;">
+                <label for="twelve_data_api_key">Twelve Data API Key (Gratis di twelvedata.com)</label>
+                <input id="twelve_data_api_key" name="twelve_data_api_key" type="password" placeholder="{{ $settings->resolvedTwelveDataKey() !== '' ? 'API Key tersimpan (Spot Aktif)' : 'Masukkan API key Twelve Data (kosong = pakai Yahoo Finance)' }}">
+            </div>
+
+            <hr style="border:0; border-top:1px solid var(--border); margin:1rem 0;">
             <h3 style="margin-top:0;">Telegram Alarm &amp; Auto-Monitor</h3>
             <div class="form-row">
                 <div>
@@ -129,6 +136,13 @@
                     <span class="badge badge-green">Terhubung</span>
                 @else
                     <span class="badge badge-amber">Belum Diisi</span>
+                @endif
+            </li>
+            <li><strong>Price Feed:</strong>
+                @if($settings->resolvedTwelveDataKey() !== '')
+                    <span class="badge badge-green">Twelve Data Spot</span>
+                @else
+                    <span class="badge badge-amber">Yahoo Finance (Fallback)</span>
                 @endif
             </li>
         </ul>

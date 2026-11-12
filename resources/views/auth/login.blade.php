@@ -256,11 +256,6 @@
 
                 <button type="submit" class="btn-submit">Masuk ke Terminal</button>
             </form>
-
-            <div class="hint">
-                Akun default awal: <code>admin@forex.local</code> / <code>admin12345</code><br>
-                (Segera ubah password di menu <strong>Akun</strong> setelah login)
-            </div>
         </section>
     </main>
 </body>

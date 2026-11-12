@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\TraderSetting;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
@@ -64,9 +65,19 @@ class ForexMarketService
     public function fetchBars(string $pair, string $interval = '5m', string $range = '30d'): array
     {
         $meta = $this->getPairMeta($pair);
-        $cacheKey = "fx_bars_{$meta['yahoo']}_{$interval}_{$range}";
+        $tdKey = $this->resolvedTwelveDataKey();
+        $modeTag = $tdKey !== '' ? 'td' : 'yh';
+        $cacheKey = "fx_bars_{$modeTag}_{$meta['yahoo']}_{$interval}_{$range}";
+        $ttl = $interval === '1d' ? 1800 : 300;
 
-        return Cache::remember($cacheKey, 180, function () use ($meta, $interval, $range) {
+        return Cache::remember($cacheKey, $ttl, function () use ($meta, $interval, $range, $tdKey) {
+            if ($tdKey !== '' && !Cache::get('twelvedata_cooldown')) {
+                $tdBars = $this->fetchTwelveDataBars($meta, $interval, $range, $tdKey);
+                if ($tdBars !== null) {
+                    return ['source' => 'twelvedata_spot', 'bars' => $tdBars];
+                }
+            }
+
             $hosts = ['https://query2.finance.yahoo.com', 'https://query1.finance.yahoo.com'];
 
             foreach ($hosts as $host) {
@@ -126,9 +137,20 @@ class ForexMarketService
     {
         $targets = $pairs ?: array_keys(self::PAIRS);
         $quotes = [];
+        $tdKey = $this->resolvedTwelveDataKey();
+
+        if ($tdKey !== '' && !Cache::get('twelvedata_cooldown')) {
+            $tdQuotes = $this->fetchTwelveDataBatchQuotes($targets, $tdKey);
+            if (!empty($tdQuotes)) {
+                $quotes = $tdQuotes;
+            }
+        }
 
         foreach ($targets as $pair) {
             $meta = $this->getPairMeta($pair);
+            if (isset($quotes[$meta['pair']])) {
+                continue;
+            }
             $cacheKey = "fx_live_quote_{$meta['yahoo']}";
 
             $quotes[$meta['pair']] = Cache::remember($cacheKey, 5, function () use ($meta) {
@@ -186,6 +208,136 @@ class ForexMarketService
         }
 
         return 10.0;
+    }
+
+    private function resolvedTwelveDataKey(): string
+    {
+        try {
+            return TraderSetting::current()->resolvedTwelveDataKey();
+        } catch (\Throwable $e) {
+            return trim((string) config('services.twelvedata.api_key', ''));
+        }
+    }
+
+    private function fetchTwelveDataBars(array $meta, string $interval, string $range, string $apiKey): ?array
+    {
+        $tdInterval = $interval === '1d' ? '1day' : '5min';
+        $outputSize = $interval === '1d' ? 200 : ($range === '5d' ? 288 : 800);
+
+        try {
+            $resp = Http::timeout(8)->get('https://api.twelvedata.com/time_series', [
+                'symbol' => $meta['pair'],
+                'interval' => $tdInterval,
+                'outputsize' => $outputSize,
+                'apikey' => $apiKey,
+            ]);
+
+            if ($resp->status() === 429) {
+                Cache::put('twelvedata_cooldown', true, 120);
+
+                return null;
+            }
+
+            if (!$resp->ok()) {
+                return null;
+            }
+
+            $json = $resp->json();
+            if (($json['status'] ?? '') === 'error') {
+                if ((int) ($json['code'] ?? 0) === 429) {
+                    Cache::put('twelvedata_cooldown', true, 120);
+                }
+
+                return null;
+            }
+
+            $values = $json['values'] ?? [];
+            if (!is_array($values) || count($values) < 30) {
+                return null;
+            }
+
+            $bars = [];
+            foreach (array_reverse($values) as $row) {
+                if (!isset($row['datetime'], $row['open'], $row['high'], $row['low'], $row['close'])) {
+                    continue;
+                }
+                $bars[] = [
+                    't' => strtotime($row['datetime'] . ' UTC') ?: time(),
+                    'o' => (float) $row['open'],
+                    'h' => (float) $row['high'],
+                    'l' => (float) $row['low'],
+                    'c' => (float) $row['close'],
+                ];
+            }
+
+            return count($bars) >= 30 ? $bars : null;
+        } catch (\Throwable $e) {
+            return null;
+        }
+    }
+
+    private function fetchTwelveDataBatchQuotes(array $targets, string $apiKey): array
+    {
+        $normalized = array_values(array_unique(array_map(fn ($p) => $this->getPairMeta($p)['pair'], $targets)));
+        sort($normalized);
+        $cacheKey = 'fx_td_batch_' . md5(implode(',', $normalized));
+
+        return Cache::remember($cacheKey, 60, function () use ($normalized, $apiKey) {
+            try {
+                $resp = Http::timeout(6)->get('https://api.twelvedata.com/price', [
+                    'symbol' => implode(',', $normalized),
+                    'apikey' => $apiKey,
+                ]);
+
+                if ($resp->status() === 429 || !$resp->ok()) {
+                    if ($resp->status() === 429) {
+                        Cache::put('twelvedata_cooldown', true, 120);
+                    }
+
+                    return [];
+                }
+
+                $json = $resp->json();
+                if (!is_array($json) || ($json['status'] ?? '') === 'error') {
+                    if ((int) ($json['code'] ?? 0) === 429) {
+                        Cache::put('twelvedata_cooldown', true, 120);
+                    }
+
+                    return [];
+                }
+
+                $out = [];
+                // Single symbol returns ['price' => '...']; multiple returns ['EUR/USD' => ['price' => '...'], ...]
+                if (count($normalized) === 1 && isset($json['price']) && is_numeric($json['price'])) {
+                    $meta = $this->getPairMeta($normalized[0]);
+                    $out[$meta['pair']] = [
+                        'price' => round((float) $json['price'], $meta['decimals']),
+                        'decimals' => $meta['decimals'],
+                        'source' => 'twelvedata_spot',
+                        'updated_at' => gmdate('H:i:s') . ' UTC',
+                    ];
+
+                    return $out;
+                }
+
+                foreach ($normalized as $pair) {
+                    $price = $json[$pair]['price'] ?? null;
+                    if ($price !== null && is_numeric($price)) {
+                        $meta = $this->getPairMeta($pair);
+                        $out[$meta['pair']] = [
+                            'price' => round((float) $price, $meta['decimals']),
+                            'decimals' => $meta['decimals'],
+                            'source' => 'twelvedata_spot',
+                            'updated_at' => gmdate('H:i:s') . ' UTC',
+                        ];
+                    }
+                }
+
+                return $out;
+            } catch (\Throwable $e) {
+                return [];
+            }
+        });
     }
 
     public function toPips(string $pair, float $priceDiff): float

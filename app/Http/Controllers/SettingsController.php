@@ -41,6 +41,7 @@ class SettingsController extends Controller
             'gemini_api_key' => 'nullable|string|max:255',
             'telegram_bot_token' => 'nullable|string|max:255',
             'telegram_chat_id' => 'nullable|string|max:80',
+            'twelve_data_api_key' => 'nullable|string|max:255',
             'auto_scan_min_score' => 'nullable|integer|min:10|max:99',
             'auto_scan_min_prob' => 'nullable|numeric|min:10|max:95',
             'blocked_pairs' => 'nullable|array',
@@ -68,6 +69,9 @@ class SettingsController extends Controller
         }
         if (!empty($data['telegram_bot_token'])) {
             $settings->telegram_bot_token = trim($data['telegram_bot_token']);
+        }
+        if (!empty($data['twelve_data_api_key'])) {
+            $settings->twelve_data_api_key = trim($data['twelve_data_api_key']);
         }
         if (array_key_exists('telegram_chat_id', $data) && $data['telegram_chat_id'] !== null) {
             $settings->telegram_chat_id = trim((string) $data['telegram_chat_id']);

@@ -49,4 +49,8 @@ return [
         'token' => env('CRON_SECRET_TOKEN'),
     ],
 
+    'twelvedata' => [
+        'api_key' => env('TWELVE_DATA_API_KEY'),
+    ],
+
 ];
