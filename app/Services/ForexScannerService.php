@@ -61,14 +61,25 @@ class ForexScannerService
             // True Asian Session Range (00:00 - 07:00 UTC) from latest session day
             [$rangeHigh, $rangeLow, $rangeType] = $this->computeAsianSessionRange($mBars);
 
+            // M15 candle-close confirmation (resample last 3 completed 5m bars) to filter 5m wick fakeouts
+            $m15Slice = array_slice($mBars, -4, 3);
+            $m15Close = !empty($m15Slice) ? (float) end($m15Slice)['c'] : $price;
+
+            $utcHour = (int) gmdate('G');
+            $utcMin = (int) gmdate('i');
+            $utcMinutes = ($utcHour * 60) + $utcMin;
+            $inKillzone = ($utcMinutes >= 420 && $utcMinutes <= 660)   // London Open 07:00-11:00 UTC
+                || ($utcMinutes >= 750 && $utcMinutes <= 990);         // NY Overlap 12:30-16:30 UTC
+            $inRollover = ($utcHour >= 20);
+
             $setups = [];
             $side = 'buy';
 
-            if ($price > $rangeHigh) {
-                $setups[] = "{$rangeType} Breakout (Long)";
+            if ($price > $rangeHigh && $m15Close > $rangeHigh) {
+                $setups[] = "{$rangeType} Breakout M15 (Long)";
                 $side = 'buy';
-            } elseif ($price < $rangeLow) {
-                $setups[] = "{$rangeType} Breakdown (Short)";
+            } elseif ($price < $rangeLow && $m15Close < $rangeLow) {
+                $setups[] = "{$rangeType} Breakdown M15 (Short)";
                 $side = 'sell';
             }
 
@@ -122,6 +133,11 @@ class ForexScannerService
                 } elseif ($counterTrend) {
                     $score -= 10;
                 }
+                if ($inKillzone) {
+                    $score += 8;
+                } elseif ($inRollover) {
+                    $score -= 12;
+                }
 
                 $hits[] = [
                     'pair' => $pair,
@@ -138,6 +154,7 @@ class ForexScannerService
                     'range_high' => round($rangeHigh, $meta['decimals']),
                     'range_low' => round($rangeLow, $meta['decimals']),
                     'atr_pips' => $atrPips,
+                    'killzone' => $inKillzone,
                     'signal_time' => gmdate('H:i', $lastM['t']) . ' UTC',
                     'score' => max(10, min(99, $score)),
                 ];

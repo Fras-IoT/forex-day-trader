@@ -113,10 +113,10 @@ jobs:
           fi
 
           mkdir -p ~/.ssh
-          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/deploy_key
+          printf '%s\n' "$VPS_SSH_KEY" | tr -d '\r' > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
 
-          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no -p "$VPS_PORT" "${VPS_USER}@${VPS_HOST}" << EOF
+          ssh -T -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no -p "$VPS_PORT" "${VPS_USER}@${VPS_HOST}" << EOF
             set -e
             cd "$VPS_APP_DIR"
             git pull origin main

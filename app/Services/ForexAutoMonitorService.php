@@ -68,6 +68,30 @@ class ForexAutoMonitorService
                 $hitTp = $isBuy ? ($price >= $tp) : ($price <= $tp);
 
                 if (!$hitSl && !$hitTp) {
+                    // Auto-Breakeven (+1.0R): move SL to entry once profit reaches 1R
+                    $entry = (float) $order->entry_price;
+                    $initialRisk = abs($entry - $sl);
+                    if (!($order->breakeven_moved ?? false) && $initialRisk > 0) {
+                        $reached1R = $isBuy
+                            ? ($price >= $entry + $initialRisk)
+                            : ($price <= $entry - $initialRisk);
+
+                        if ($reached1R) {
+                            $order->stop_loss = $entry;
+                            $order->breakeven_moved = true;
+                            $order->save();
+
+                            if ($this->telegram->isConfigured()) {
+                                $msg = "🛡️ <b>BREAKEVEN (+1.0R) — {$order->pair} (" . strtoupper($order->side) . ")</b>\n"
+                                    . "Live Price: <code>{$price}</code>\n"
+                                    . "Stop Loss otomatis digeser ke Entry: <code>{$entry}</code> (Risk-Free)";
+                                $sent = $this->telegram->sendMessage($msg);
+                                if ($sent['ok']) {
+                                    $summary['alerts_sent']++;
+                                }
+                            }
+                        }
+                    }
                     continue;
                 }
 
@@ -153,7 +177,13 @@ class ForexAutoMonitorService
             $priceSource = $spot['source'] ?? 'yahoo_live';
 
             $atrPrice = max($meta['pip'] * 5, ((float) ($hit['atr_pips'] ?? 10)) * $meta['pip']);
-            $risk = $atrPrice * 1.5;
+            $minAtrRisk = $atrPrice * 2.5;
+            $maxAtrRisk = $atrPrice * 6.0;
+            $rangeEdge = $side === 'buy'
+                ? (float) ($hit['range_low'] ?? ($entry - $minAtrRisk))
+                : (float) ($hit['range_high'] ?? ($entry + $minAtrRisk));
+            $structuralDist = abs($entry - $rangeEdge) + ($atrPrice * 0.5);
+            $risk = max($minAtrRisk, min($maxAtrRisk, $structuralDist));
 
             $stop = $side === 'buy'
                 ? round($entry - $risk, $decimals)
@@ -165,15 +195,20 @@ class ForexAutoMonitorService
             $summary['scan_hits_evaluated']++;
             $mc = $this->timeMachine->quickEvaluate($pair, $side, $entry, $stop, $target, 2500, 19, true);
 
-            if ($mc['target_first_pct'] <= $minProb) {
+            $hasPositiveEdge = ($mc['expected_r'] >= 0.15)
+                && ($mc['target_first_pct'] >= ($rr >= 2.0 ? 45.0 : 50.0));
+            $meetsHighProb = $mc['target_first_pct'] > $minProb;
+
+            if (!$hasPositiveEdge && !$meetsHighProb) {
                 continue;
             }
 
             if ($this->telegram->isConfigured()) {
-                $msg = "🚨 <b>PELUANG ENTRY &gt; {$minProb}% — {$pair} (" . strtoupper($side) . ")</b>\n"
+                $kzTag = !empty($hit['killzone']) ? ' | Killzone ✓' : '';
+                $msg = "🚨 <b>PELUANG ENTRY BER-EDGE — {$pair} (" . strtoupper($side) . ")</b>\n"
                     . "Setup: <b>{$hit['setup']}</b>\n"
-                    . "Scanner Score: <b>{$hit['score']}/99</b> | Trend: {$hit['trend_bias']}\n"
-                    . "Monte Carlo Target First: <b>{$mc['target_first_pct']}%</b> (Expected: {$mc['expected_r']}R)\n"
+                    . "Scanner Score: <b>{$hit['score']}/99</b> | Trend: {$hit['trend_bias']}{$kzTag}\n"
+                    . "Monte Carlo: <b>{$mc['target_first_pct']}%</b> (Expected: <b>{$mc['expected_r']}R</b>)\n"
                     . "Entry: <code>{$entry}</code> | SL: <code>{$stop}</code> | TP: <code>{$target}</code>\n"
                     . "<i>Sesi: {$scan->session} | Feed: {$priceSource}</i>";
 
