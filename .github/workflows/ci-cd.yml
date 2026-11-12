@@ -102,10 +102,10 @@ jobs:
       - name: Deploy via SSH & Docker Compose
         env:
           VPS_HOST: ${{ secrets.VPS_HOST || '72.62.126.151' }}
-          VPS_USER: ${{ secrets.VPS_USER || 'root' }}
+          VPS_USER: ${{ secrets.VPS_USER || 'frastio' }}
           VPS_PORT: ${{ secrets.VPS_PORT || '22' }}
           VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
-          VPS_APP_DIR: ${{ secrets.VPS_APP_DIR || '/var/www/forex-day-trader' }}
+          VPS_APP_DIR: ${{ secrets.VPS_APP_DIR || '/home/frastio/forex-day-trader' }}
         run: |
           if [ -z "$VPS_SSH_KEY" ]; then
             echo "VPS_SSH_KEY secret belum diatur. Melewati auto-deploy."
