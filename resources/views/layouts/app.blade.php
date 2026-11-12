@@ -449,8 +449,10 @@
         <a href="{{ route('timemachine.index') }}" class="{{ request()->routeIs('timemachine.*') ? 'active' : '' }}">Time Machine</a>
         <a href="{{ route('broker.index') }}" class="{{ request()->routeIs('broker.*') ? 'active' : '' }}">Risk & Broker</a>
         <a href="{{ route('alerts.index') }}" class="{{ request()->routeIs('alerts.*') ? 'active' : '' }}">Alerts</a>
-        <a href="{{ route('accounts.index') }}" class="{{ request()->routeIs('accounts.*') ? 'active' : '' }}">Akun</a>
-        <a href="{{ route('settings.index') }}" class="{{ request()->routeIs('settings.*') ? 'active' : '' }}">Settings</a>
+        @if(auth()->user()?->role === 'admin')
+            <a href="{{ route('accounts.index') }}" class="{{ request()->routeIs('accounts.*') ? 'active' : '' }}">Akun</a>
+            <a href="{{ route('settings.index') }}" class="{{ request()->routeIs('settings.*') ? 'active' : '' }}">Settings</a>
+        @endif
         <form method="POST" action="{{ route('logout') }}" style="display:inline;">
             @csrf
             <button type="submit" class="btn btn-sm" style="margin-left:0.25rem;">Logout</button>

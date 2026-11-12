@@ -65,20 +65,22 @@ Route::middleware('auth')->group(function () {
         Route::post('/clear', [CopilotController::class, 'clear'])->name('clear');
     });
 
-    Route::prefix('settings')->name('settings.')->group(function () {
-        Route::get('/', [SettingsController::class, 'index'])->name('index');
-        Route::post('/', [SettingsController::class, 'update'])->name('update');
-        Route::post('/test-gemini', [SettingsController::class, 'testGemini'])->name('test-gemini');
-        Route::post('/test-telegram', [SettingsController::class, 'testTelegram'])->name('test-telegram');
-        Route::post('/run-monitor', [SettingsController::class, 'runMonitor'])->name('run-monitor');
-    });
+    Route::middleware(\App\Http\Middleware\EnsureAdmin::class)->group(function () {
+        Route::prefix('settings')->name('settings.')->group(function () {
+            Route::get('/', [SettingsController::class, 'index'])->name('index');
+            Route::post('/', [SettingsController::class, 'update'])->name('update');
+            Route::post('/test-gemini', [SettingsController::class, 'testGemini'])->name('test-gemini');
+            Route::post('/test-telegram', [SettingsController::class, 'testTelegram'])->name('test-telegram');
+            Route::post('/run-monitor', [SettingsController::class, 'runMonitor'])->name('run-monitor');
+        });
 
-    Route::prefix('accounts')->name('accounts.')->group(function () {
-        Route::get('/', [AccountController::class, 'index'])->name('index');
-        Route::post('/', [AccountController::class, 'store'])->name('store');
-        Route::post('/profile', [AccountController::class, 'updateProfile'])->name('profile');
-        Route::post('/{id}/toggle', [AccountController::class, 'toggle'])->name('toggle');
-        Route::delete('/{id}', [AccountController::class, 'destroy'])->name('destroy');
+        Route::prefix('accounts')->name('accounts.')->group(function () {
+            Route::get('/', [AccountController::class, 'index'])->name('index');
+            Route::post('/', [AccountController::class, 'store'])->name('store');
+            Route::post('/profile', [AccountController::class, 'updateProfile'])->name('profile');
+            Route::post('/{id}/toggle', [AccountController::class, 'toggle'])->name('toggle');
+            Route::delete('/{id}', [AccountController::class, 'destroy'])->name('destroy');
+        });
     });
 });
 
