@@ -70,6 +70,9 @@ class ForexTimeMachineService
         $endPrices = [];
         $fanSampleCount = min(1500, $replays);
         $fanMatrix = array_fill(0, $horizonBars, []);
+        $maxSamplePaths = 45;
+        $sampleStride = max(1, (int) floor($replays / $maxSamplePaths));
+        $samplePaths = [];
 
         $window = 3;
         for ($r = 0; $r < $replays; $r++) {
@@ -77,11 +80,16 @@ class ForexTimeMachineService
             $outcome = 'neither';
             $rOut = 0.0;
             $recordFan = $r < $fanSampleCount;
+            $recordPath = ($r % $sampleStride === 0) && count($samplePaths) < $maxSamplePaths;
+            $pathPts = $recordPath ? [round($entry, $meta['decimals'])] : [];
 
             for ($step = 1; $step < $horizonBars; $step++) {
                 if ($outcome !== 'neither') {
                     if ($recordFan) {
                         $fanMatrix[$step][] = $cur;
+                    }
+                    if ($recordPath && $step % 3 === 0) {
+                        $pathPts[] = round($cur, $meta['decimals']);
                     }
                     continue;
                 }
@@ -124,6 +132,16 @@ class ForexTimeMachineService
                 if ($recordFan) {
                     $fanMatrix[$step][] = $cur;
                 }
+                if ($recordPath && $step % 3 === 0) {
+                    $pathPts[] = round($cur, $meta['decimals']);
+                }
+            }
+
+            if ($recordPath) {
+                $samplePaths[] = [
+                    'outcome' => $outcome,
+                    'points' => $pathPts,
+                ];
             }
 
             if ($outcome === 'target') {
@@ -221,6 +239,7 @@ class ForexTimeMachineService
                 'p95' => $pct($endPrices, 0.95),
             ],
             'fan_series' => $fanSeries,
+            'sample_paths' => $samplePaths,
             'histogram' => $this->buildHistogram($endPrices, 16, $meta['decimals']),
             'history_stats' => $histStats,
             'ai_verdict' => null,

@@ -327,7 +327,7 @@
 </main>
 
 <footer>
-    <strong>Disclaimer:</strong> Bukan nasihat keuangan (Not financial advice). Paper trading aktif secara default. Tidak ada order yang dieksekusi tanpa konfirmasi eksplisit Anda. Terinspirasi dari <code>day-trader-skill</code>, diadaptasi untuk Forex + Gemini AI + Laravel + MongoDB.
+    <strong>Disclaimer:</strong> Bukan nasihat keuangan (Not financial advice). Paper trading aktif secara default. Tidak ada order yang dieksekusi tanpa konfirmasi eksplisit Anda.
 </footer>
 
 <script>

@@ -28,6 +28,7 @@ class SimulationRun extends Model
         'verdict',
         'percentiles',
         'fan_series',
+        'sample_paths',
         'histogram',
         'history_stats',
         'ai_verdict',
