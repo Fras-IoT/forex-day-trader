@@ -102,7 +102,7 @@
                         </tr>
                         @if($plan->ai_analysis)
                         <tr>
-                            <td colspan="7"><div class="ai-box">{{ $plan->ai_analysis }}</div></td>
+                            <td colspan="7"><div class="ai-box">{!! \App\Services\GeminiService::toHtml($plan->ai_analysis) !!}</div></td>
                         </tr>
                         @endif
                         @endforeach

@@ -30,7 +30,7 @@
 @if($latestScan && $latestScan->ai_summary)
     <div class="card" style="margin-bottom: 1rem;">
         <h3>Gemini AI Scanner Brief</h3>
-        <div class="ai-box">{{ $latestScan->ai_summary }}</div>
+        <div class="ai-box">{!! \App\Services\GeminiService::toHtml($latestScan->ai_summary) !!}</div>
     </div>
 @endif
 

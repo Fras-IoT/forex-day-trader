@@ -30,7 +30,7 @@
     </div>
 
     @if($b->ai_brief)
-        <div class="ai-box" style="margin-bottom:0.75rem;">{{ $b->ai_brief }}</div>
+        <div class="ai-box" style="margin-bottom:0.75rem;">{!! \App\Services\GeminiService::toHtml($b->ai_brief) !!}</div>
     @elseif(!$geminiConfigured)
         <div class="muted" style="margin-bottom:0.75rem;"><em>Ringkasan AI tidak aktif (Gemini token belum diisi di Settings).</em></div>
     @endif

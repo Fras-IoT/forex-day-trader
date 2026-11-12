@@ -558,7 +558,7 @@
         </div>
 
         @if($sim->ai_verdict)
-            <div class="ai-box">{{ $sim->ai_verdict }}</div>
+            <div class="ai-box">{!! \App\Services\GeminiService::toHtml($sim->ai_verdict) !!}</div>
         @endif
     </div>
 </div>

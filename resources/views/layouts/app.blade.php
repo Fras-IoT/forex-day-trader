@@ -268,10 +268,29 @@
         .ai-box {
             background: var(--surface-2);
             border-left: 3px solid var(--brand);
-            padding: 0.85rem 1rem;
+            padding: 0.95rem 1.15rem;
             border-radius: 6px;
-            white-space: pre-wrap;
             font-size: 0.9rem;
+            line-height: 1.6;
+        }
+        .ai-box > :first-child { margin-top: 0; }
+        .ai-box > :last-child { margin-bottom: 0; }
+        .ai-box h1, .ai-box h2, .ai-box h3, .ai-box h4 {
+            margin: 0.85rem 0 0.4rem;
+            font-size: 0.98rem;
+            font-weight: 700;
+            color: var(--text);
+        }
+        .ai-box p { margin: 0.45rem 0; }
+        .ai-box ul, .ai-box ol {
+            margin: 0.35rem 0 0.55rem;
+            padding-left: 1.25rem;
+        }
+        .ai-box li { margin: 0.25rem 0; }
+        .ai-box hr {
+            border: 0;
+            border-top: 1px solid var(--border);
+            margin: 0.75rem 0;
         }
         footer {
             max-width: 1280px;

@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\AiInteraction;
 use App\Models\TraderSetting;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Str;
 
 class GeminiService
 {
@@ -160,6 +161,28 @@ class GeminiService
         $joined = trim(implode("\n", $chunks));
 
         return $joined !== '' ? $joined : null;
+    }
+
+    /**
+     * Convert Gemini Markdown/LaTeX output into clean, safe HTML for .ai-box containers.
+     */
+    public static function toHtml(?string $text): string
+    {
+        $raw = trim((string) $text);
+        if ($raw === '') {
+            return '';
+        }
+
+        // Clean inline/block LaTeX wrappers and common symbols so formulas read cleanly
+        $clean = preg_replace('/\$\$(.*?)\$\$/s', '$1', $raw);
+        $clean = preg_replace('/\$([^$\n]+)\$/', '$1', (string) $clean);
+        $clean = preg_replace('/\\\\text\{([^}]*)\}/', '$1', (string) $clean);
+        $clean = str_replace(['\\approx', '\\times', '\\cdot', '\\%'], ['≈', '×', '·', '%'], (string) $clean);
+
+        return Str::markdown($clean, [
+            'html_input' => 'strip',
+            'allow_unsafe_links' => false,
+        ]);
     }
 }
 
