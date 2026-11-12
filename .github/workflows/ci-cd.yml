@@ -84,7 +84,7 @@ jobs:
         run: docker build -t forex-day-trader:ci .
 
       - name: Trivy Container Vulnerability Scan
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: forex-day-trader:ci
           format: table
