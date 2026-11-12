@@ -93,20 +93,34 @@ jobs:
           severity: CRITICAL,HIGH
 
   deploy:
-    name: Deploy to Render
+    name: Deploy to VPS (72.62.126.151)
     needs: [test, security]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
 
     steps:
-      - name: Trigger Render Deploy Hook
+      - name: Deploy via SSH & Docker Compose
         env:
-          RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
+          VPS_HOST: ${{ secrets.VPS_HOST || '72.62.126.151' }}
+          VPS_USER: ${{ secrets.VPS_USER || 'root' }}
+          VPS_PORT: ${{ secrets.VPS_PORT || '22' }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_APP_DIR: ${{ secrets.VPS_APP_DIR || '/var/www/forex-day-trader' }}
         run: |
-          if [ -z "$RENDER_DEPLOY_HOOK" ]; then
-            echo "RENDER_DEPLOY_HOOK secret belum diatur. Melewati auto-deploy."
+          if [ -z "$VPS_SSH_KEY" ]; then
+            echo "VPS_SSH_KEY secret belum diatur. Melewati auto-deploy."
             exit 0
           fi
-          curl -fsSL -X POST "$RENDER_DEPLOY_HOOK"
-          echo "Deploy Render berhasil dipicu setelah seluruh test & security check lulus."
+
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no -p "$VPS_PORT" "${VPS_USER}@${VPS_HOST}" << EOF
+            set -e
+            cd "$VPS_APP_DIR"
+            git pull origin main
+            docker compose up -d --build
+            docker image prune -f
+          EOF
 

@@ -27,7 +27,7 @@
                     {{ $m->role === 'user' ? 'Anda' : 'Gemini (' . $m->model . ')' }}
                     @if($m->pair) &bull; {{ $m->pair }} @endif
                 </div>
-                <div style="max-width:85%; padding:0.65rem 0.9rem; border-radius:8px; white-space:pre-wrap; border:1px solid var(--border); background:{{ $m->role === 'user' ? 'var(--brand)' : 'var(--surface)' }}; color:{{ $m->role === 'user' ? 'var(--brand-text)' : 'var(--text)' }};">{{ $m->content }}</div>
+                <div class="{{ $m->role === 'assistant' ? 'ai-box' : '' }}" style="max-width:85%; padding:0.65rem 0.9rem; border-radius:8px; {{ $m->role === 'user' ? 'white-space:pre-wrap; border:1px solid var(--border); background:var(--brand); color:var(--brand-text);' : '' }}">@if($m->role === 'assistant'){!! \App\Services\GeminiService::toHtml($m->content) !!}@else{{ $m->content }}@endif</div>
             </div>
         @empty
             <p class="muted">Belum ada percakapan. Tanyakan tentang setup EUR/USD, manajemen risiko lot, atau evaluasi hasil Time Machine Anda.</p>

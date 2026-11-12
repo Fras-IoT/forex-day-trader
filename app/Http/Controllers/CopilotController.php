@@ -24,6 +24,29 @@ class CopilotController extends Controller
         ]);
     }
 
+    public function history(GeminiService $gemini)
+    {
+        $messages = AiInteraction::orderBy('created_at', 'asc')->take(40)->get()->map(function ($m) {
+            return [
+                'role' => $m->role,
+                'pair' => $m->pair,
+                'model' => $m->model,
+                'html' => $m->role === 'assistant'
+                    ? GeminiService::toHtml($m->content)
+                    : nl2br(e((string) $m->content)),
+            ];
+        })->values();
+
+        $lastAssistant = AiInteraction::where('role', 'assistant')->orderBy('created_at', 'desc')->first();
+
+        return response()->json([
+            'ok' => true,
+            'configured' => $gemini->isConfigured(),
+            'lastInteractionId' => $lastAssistant?->interaction_id,
+            'messages' => $messages,
+        ]);
+    }
+
     public function send(Request $request, GeminiService $gemini, ForexMarketService $market)
     {
         $data = $request->validate([
@@ -62,15 +85,32 @@ class CopilotController extends Controller
         );
 
         if (!$res['ok']) {
+            if ($request->expectsJson()) {
+                return response()->json(['ok' => false, 'error' => $res['error']], 422);
+            }
+
             return redirect()->route('copilot.index')->with('error', $res['error']);
+        }
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'ok' => true,
+                'interaction_id' => $res['interaction_id'],
+                'html' => GeminiService::toHtml($res['text']),
+                'pair' => $pair,
+            ]);
         }
 
         return redirect()->route('copilot.index');
     }
 
-    public function clear()
+    public function clear(Request $request)
     {
         AiInteraction::truncate();
+
+        if ($request->expectsJson()) {
+            return response()->json(['ok' => true]);
+        }
 
         return redirect()->route('copilot.index')->with('status', 'Riwayat percakapan Copilot dibersihkan.');
     }

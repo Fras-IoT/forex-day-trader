@@ -60,6 +60,7 @@ Route::middleware('auth')->group(function () {
 
     Route::prefix('copilot')->name('copilot.')->group(function () {
         Route::get('/', [CopilotController::class, 'index'])->name('index');
+        Route::get('/history', [CopilotController::class, 'history'])->name('history');
         Route::post('/send', [CopilotController::class, 'send'])->name('send');
         Route::post('/clear', [CopilotController::class, 'clear'])->name('clear');
     });

@@ -299,6 +299,140 @@
             font-size: 0.8rem;
             color: var(--muted);
         }
+
+        /* Floating Gemini Copilot Web Chat Widget */
+        .copilot-fab {
+            position: fixed;
+            right: 1.25rem;
+            bottom: 1.25rem;
+            z-index: 40;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.72rem 1.05rem;
+            border-radius: 999px;
+            border: 1px solid rgba(56, 189, 248, 0.4);
+            background: linear-gradient(135deg, #2563eb, #0ea5e9);
+            color: #ffffff;
+            font-weight: 700;
+            font-size: 0.88rem;
+            cursor: pointer;
+            box-shadow: 0 10px 26px rgba(37, 99, 235, 0.35);
+            transition: transform 0.15s ease, box-shadow 0.15s ease;
+        }
+        .copilot-fab:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 14px 30px rgba(37, 99, 235, 0.45);
+        }
+        .copilot-fab-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 999px;
+            background: #4ade80;
+            box-shadow: 0 0 8px #4ade80;
+        }
+        #copilot-widget[popover] {
+            position: fixed;
+            inset: auto 1.25rem 4.85rem auto;
+            margin: 0;
+            padding: 0;
+            width: min(400px, calc(100vw - 2rem));
+            height: min(540px, calc(100vh - 6.5rem));
+            border-radius: 14px;
+            border: 1px solid var(--border);
+            background: var(--surface);
+            color: var(--text);
+            box-shadow: 0 20px 48px rgba(15, 23, 42, 0.28);
+            display: none;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        #copilot-widget[popover]:is(:popover-open, .\:popover-open) {
+            display: flex;
+        }
+        .copilot-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.5rem;
+            padding: 0.75rem 0.9rem;
+            background: linear-gradient(135deg, #0f172a, #1e293b);
+            color: #f8fafc;
+        }
+        .copilot-head-actions {
+            display: flex;
+            align-items: center;
+            gap: 0.35rem;
+        }
+        .copilot-icon-btn {
+            background: rgba(255, 255, 255, 0.12);
+            color: #f8fafc;
+            border: 0;
+            border-radius: 6px;
+            padding: 0.25rem 0.5rem;
+            font-size: 0.75rem;
+            cursor: pointer;
+        }
+        .copilot-icon-btn:hover { background: rgba(255, 255, 255, 0.22); }
+        .copilot-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 0.85rem;
+            background: var(--bg);
+            display: flex;
+            flex-direction: column;
+            gap: 0.65rem;
+        }
+        .copilot-msg {
+            max-width: 88%;
+            padding: 0.55rem 0.8rem;
+            border-radius: 10px;
+            font-size: 0.84rem;
+            line-height: 1.5;
+        }
+        .copilot-msg-user {
+            align-self: flex-end;
+            background: var(--brand);
+            color: var(--brand-text);
+            white-space: pre-wrap;
+        }
+        .copilot-msg-ai {
+            align-self: flex-start;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            color: var(--text);
+        }
+        .copilot-msg-ai > :first-child { margin-top: 0; }
+        .copilot-msg-ai > :last-child { margin-bottom: 0; }
+        .copilot-msg-ai p { margin: 0.35rem 0; }
+        .copilot-msg-ai ul, .copilot-msg-ai ol { margin: 0.25rem 0 0.4rem; padding-left: 1.1rem; }
+        .copilot-msg-ai h1, .copilot-msg-ai h2, .copilot-msg-ai h3, .copilot-msg-ai h4 {
+            margin: 0.5rem 0 0.25rem;
+            font-size: 0.9rem;
+        }
+        .copilot-form {
+            display: flex;
+            flex-direction: column;
+            gap: 0.4rem;
+            padding: 0.65rem 0.75rem;
+            border-top: 1px solid var(--border);
+            background: var(--surface);
+        }
+        .copilot-form-row {
+            display: flex;
+            gap: 0.4rem;
+            align-items: center;
+        }
+        .copilot-form select {
+            width: 112px;
+            padding: 0.42rem 0.45rem;
+            font-size: 0.78rem;
+        }
+        .copilot-form input[type="text"] {
+            flex: 1;
+            padding: 0.45rem 0.6rem;
+            font-size: 0.84rem;
+        }
     </style>
 </head>
 <body>
@@ -315,7 +449,6 @@
         <a href="{{ route('timemachine.index') }}" class="{{ request()->routeIs('timemachine.*') ? 'active' : '' }}">Time Machine</a>
         <a href="{{ route('broker.index') }}" class="{{ request()->routeIs('broker.*') ? 'active' : '' }}">Risk & Broker</a>
         <a href="{{ route('alerts.index') }}" class="{{ request()->routeIs('alerts.*') ? 'active' : '' }}">Alerts</a>
-        <a href="{{ route('copilot.index') }}" class="{{ request()->routeIs('copilot.*') ? 'active' : '' }}">Gemini Copilot</a>
         <a href="{{ route('accounts.index') }}" class="{{ request()->routeIs('accounts.*') ? 'active' : '' }}">Akun</a>
         <a href="{{ route('settings.index') }}" class="{{ request()->routeIs('settings.*') ? 'active' : '' }}">Settings</a>
         <form method="POST" action="{{ route('logout') }}" style="display:inline;">
@@ -391,6 +524,174 @@
     setInterval(refreshPrices, 5000);
 })();
 </script>
+
+@auth
+<button type="button" class="copilot-fab" commandfor="copilot-widget" command="toggle-popover" aria-label="Buka Chat Gemini Copilot">
+    <span class="copilot-fab-dot" aria-hidden="true"></span>
+    <span>&#x1F4AC; Gemini Copilot</span>
+</button>
+
+<div id="copilot-widget" popover>
+    <div class="copilot-head">
+        <div>
+            <div style="font-weight:700; font-size:0.9rem;">Gemini FX Copilot</div>
+            <div style="font-size:0.72rem; color:#94a3b8;">Asisten Trading &amp; Manajemen Risiko</div>
+        </div>
+        <div class="copilot-head-actions">
+            <button type="button" id="copilot-clear-btn" class="copilot-icon-btn" title="Bersihkan chat">Clear</button>
+            <button type="button" class="copilot-icon-btn" commandfor="copilot-widget" command="hide-popover" aria-label="Tutup chat">&#x2715;</button>
+        </div>
+    </div>
+
+    <div id="copilot-messages" class="copilot-messages">
+        <div class="muted" style="font-size:0.8rem;">Memuat riwayat percakapan...</div>
+    </div>
+
+    <form id="copilot-chat-form" class="copilot-form">
+        <div class="copilot-form-row">
+            <select id="copilot-pair" name="pair" aria-label="Fokus Pair">
+                @foreach(array_keys(\App\Services\ForexMarketService::PAIRS) as $p)
+                    <option value="{{ $p }}">{{ $p }}</option>
+                @endforeach
+            </select>
+            <input id="copilot-input" name="message" type="text" placeholder="Tanya setup, SL/TP, atau risiko..." required autocomplete="off">
+            <button type="submit" id="copilot-send-btn" class="btn btn-primary btn-sm">Kirim</button>
+        </div>
+    </form>
+</div>
+
+<script type="module">
+    if (!Object.hasOwn(HTMLElement.prototype, 'popover')) {
+        import('https://unpkg.com/@oddbird/popover-polyfill@latest/dist/popover.min.js');
+    }
+    if (!('commandForElement' in HTMLButtonElement.prototype)) {
+        import('https://esm.run/invokers-polyfill');
+    }
+</script>
+
+<script>
+(() => {
+    const widget = document.getElementById('copilot-widget');
+    const messagesEl = document.getElementById('copilot-messages');
+    const form = document.getElementById('copilot-chat-form');
+    const input = document.getElementById('copilot-input');
+    const pairSelect = document.getElementById('copilot-pair');
+    const sendBtn = document.getElementById('copilot-send-btn');
+    const clearBtn = document.getElementById('copilot-clear-btn');
+    if (!widget || !messagesEl || !form) return;
+
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+    let lastInteractionId = null;
+    let loaded = false;
+
+    function scrollBottom() {
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    function appendMessage(role, htmlOrText, isHtml = false) {
+        const emptyHint = messagesEl.querySelector('.copilot-empty');
+        if (emptyHint) emptyHint.remove();
+
+        const div = document.createElement('div');
+        div.className = 'copilot-msg ' + (role === 'user' ? 'copilot-msg-user' : 'copilot-msg-ai');
+        if (isHtml) {
+            div.innerHTML = htmlOrText;
+        } else {
+            div.textContent = htmlOrText;
+        }
+        messagesEl.appendChild(div);
+        scrollBottom();
+        return div;
+    }
+
+    async function loadHistory() {
+        if (loaded) return;
+        try {
+            const res = await fetch('{{ route('copilot.history') }}', { headers: { 'Accept': 'application/json' } });
+            if (!res.ok) return;
+            const data = await res.json();
+            loaded = true;
+            lastInteractionId = data.lastInteractionId || null;
+            messagesEl.innerHTML = '';
+
+            if (!data.configured) {
+                messagesEl.innerHTML = '<div class="alert-banner alert-warn" style="margin:0;">Token Gemini API belum diisi. <a href="{{ route('settings.index') }}">Buka Settings</a>.</div>';
+            }
+
+            if (!data.messages || !data.messages.length) {
+                const p = document.createElement('div');
+                p.className = 'muted copilot-empty';
+                p.style.fontSize = '0.8rem';
+                p.textContent = 'Halo! Tanyakan setup pair, saran SL/TP, atau evaluasi risiko trading Anda.';
+                messagesEl.appendChild(p);
+                return;
+            }
+
+            data.messages.forEach(m => appendMessage(m.role, m.html, true));
+        } catch (_) {
+            messagesEl.innerHTML = '<div class="muted" style="font-size:0.8rem;">Gagal memuat riwayat chat.</div>';
+        }
+    }
+
+    widget.addEventListener('toggle', (e) => {
+        if (e.newState === 'open') {
+            loadHistory();
+            setTimeout(() => input?.focus(), 60);
+        }
+    });
+
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const text = input.value.trim();
+        if (!text) return;
+
+        appendMessage('user', text, false);
+        input.value = '';
+        sendBtn.disabled = true;
+        const typing = appendMessage('assistant', '<span class="muted">Gemini sedang mengetik...</span>', true);
+
+        try {
+            const res = await fetch('{{ route('copilot.send') }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': csrfToken
+                },
+                body: JSON.stringify({
+                    message: text,
+                    pair: pairSelect.value,
+                    previous_interaction_id: lastInteractionId
+                })
+            });
+            const data = await res.json();
+            if (!res.ok || !data.ok) {
+                typing.innerHTML = '<span style="color:var(--red);">' + (data.error || 'Gagal menghubungi Gemini.') + '</span>';
+            } else {
+                lastInteractionId = data.interaction_id || lastInteractionId;
+                typing.innerHTML = data.html;
+            }
+        } catch (_) {
+            typing.innerHTML = '<span style="color:var(--red);">Koneksi terputus. Coba lagi.</span>';
+        } finally {
+            sendBtn.disabled = false;
+            scrollBottom();
+        }
+    });
+
+    clearBtn?.addEventListener('click', async () => {
+        try {
+            await fetch('{{ route('copilot.clear') }}', {
+                method: 'POST',
+                headers: { 'Accept': 'application/json', 'X-CSRF-TOKEN': csrfToken }
+            });
+            lastInteractionId = null;
+            messagesEl.innerHTML = '<div class="muted copilot-empty" style="font-size:0.8rem;">Riwayat percakapan dibersihkan. Silakan mulai pertanyaan baru.</div>';
+        } catch (_) {}
+    });
+})();
+</script>
+@endauth
 </body>
 </html>
 
