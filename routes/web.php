@@ -67,6 +67,8 @@ Route::middleware('auth')->group(function () {
         Route::get('/', [SettingsController::class, 'index'])->name('index');
         Route::post('/', [SettingsController::class, 'update'])->name('update');
         Route::post('/test-gemini', [SettingsController::class, 'testGemini'])->name('test-gemini');
+        Route::post('/test-telegram', [SettingsController::class, 'testTelegram'])->name('test-telegram');
+        Route::post('/run-monitor', [SettingsController::class, 'runMonitor'])->name('run-monitor');
     });
 
     Route::prefix('accounts')->name('accounts.')->group(function () {
@@ -77,3 +79,15 @@ Route::middleware('auth')->group(function () {
         Route::delete('/{id}', [AccountController::class, 'destroy'])->name('destroy');
     });
 });
+
+// Token-protected webhook for external cron (e.g. cron-job.org) when container sleeps on free tier
+Route::get('/cron/monitor', function (\Illuminate\Http\Request $request, \App\Services\ForexAutoMonitorService $monitor) {
+    $expected = (string) config('services.cron.token', '');
+    $provided = (string) ($request->query('token') ?? $request->header('X-Cron-Token', ''));
+
+    if ($expected === '' || !hash_equals($expected, $provided)) {
+        abort(403, 'Invalid or unconfigured CRON_SECRET_TOKEN.');
+    }
+
+    return response()->json(['ok' => true, 'summary' => $monitor->run()]);
+})->name('cron.monitor');

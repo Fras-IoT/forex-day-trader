@@ -24,6 +24,12 @@ class TraderSetting extends Model
         'flat_by_utc',
         'gemini_api_key',
         'gemini_model',
+        'telegram_bot_token',
+        'telegram_chat_id',
+        'auto_scan_enabled',
+        'auto_scan_min_score',
+        'auto_scan_min_prob',
+        'auto_close_on_hit',
     ];
 
     public static function current(): self
@@ -48,6 +54,12 @@ class TraderSetting extends Model
             'flat_by_utc' => '21:55',
             'gemini_api_key' => '',
             'gemini_model' => config('services.gemini.model', 'gemini-3.8-flash'),
+            'telegram_bot_token' => '',
+            'telegram_chat_id' => '',
+            'auto_scan_enabled' => true,
+            'auto_scan_min_score' => 70,
+            'auto_scan_min_prob' => 55,
+            'auto_close_on_hit' => true,
         ]);
     }
 
@@ -59,6 +71,26 @@ class TraderSetting extends Model
         }
 
         return trim((string) config('services.gemini.api_key', ''));
+    }
+
+    public function resolvedTelegramToken(): string
+    {
+        $dbToken = trim((string) ($this->telegram_bot_token ?? ''));
+        if ($dbToken !== '') {
+            return $dbToken;
+        }
+
+        return trim((string) config('services.telegram.bot_token', ''));
+    }
+
+    public function resolvedTelegramChatId(): string
+    {
+        $dbChat = trim((string) ($this->telegram_chat_id ?? ''));
+        if ($dbChat !== '') {
+            return $dbChat;
+        }
+
+        return trim((string) config('services.telegram.chat_id', ''));
     }
 }
 

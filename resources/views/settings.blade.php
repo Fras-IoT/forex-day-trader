@@ -75,6 +75,39 @@
                 </label>
             </div>
 
+            <hr style="border:0; border-top:1px solid var(--border); margin:1rem 0;">
+            <h3 style="margin-top:0;">Telegram Alarm &amp; Auto-Monitor</h3>
+            <div class="form-row">
+                <div>
+                    <label for="telegram_bot_token">Telegram Bot Token (dari @BotFather)</label>
+                    <input id="telegram_bot_token" name="telegram_bot_token" type="password" placeholder="{{ $settings->resolvedTelegramToken() !== '' ? 'Token tersimpan (tersembunyi)' : '123456:ABC-DEF...' }}">
+                </div>
+                <div>
+                    <label for="telegram_chat_id">Telegram Chat ID</label>
+                    <input id="telegram_chat_id" name="telegram_chat_id" type="text" value="{{ $settings->resolvedTelegramChatId() }}" placeholder="Contoh: 123456789">
+                </div>
+            </div>
+            <div class="form-row">
+                <div>
+                    <label for="auto_scan_min_score">Min Scanner Score (Kombinasi)</label>
+                    <input id="auto_scan_min_score" name="auto_scan_min_score" type="number" min="10" max="99" value="{{ $settings->auto_scan_min_score ?? 70 }}">
+                </div>
+                <div>
+                    <label for="auto_scan_min_prob">Min Monte Carlo Target First (%)</label>
+                    <input id="auto_scan_min_prob" name="auto_scan_min_prob" type="number" step="1" min="10" max="95" value="{{ $settings->auto_scan_min_prob ?? 55 }}">
+                </div>
+            </div>
+            <div style="display:flex; flex-direction:column; gap:0.4rem; margin-bottom:0.9rem;">
+                <label style="display:flex; align-items:center; gap:0.5rem; font-weight:600;">
+                    <input type="checkbox" name="auto_scan_enabled" value="1" {{ ($settings->auto_scan_enabled ?? true) ? 'checked' : '' }} style="width:auto;">
+                    Aktifkan Auto-Scan Peluang &gt; 55% ke Telegram (tiap 5 menit)
+                </label>
+                <label style="display:flex; align-items:center; gap:0.5rem; font-weight:600;">
+                    <input type="checkbox" name="auto_close_on_hit" value="1" {{ ($settings->auto_close_on_hit ?? true) ? 'checked' : '' }} style="width:auto;">
+                    Otomatis Close PaperOrder saat hit SL / TP + Kirim Notifikasi Telegram
+                </label>
+            </div>
+
             <button class="btn btn-primary" type="submit">Simpan Pengaturan</button>
         </form>
     </div>
@@ -91,12 +124,29 @@
                 @endif
             </li>
             <li><strong>Active Model:</strong> <code>{{ $settings->gemini_model }}</code></li>
+            <li><strong>Telegram Bot:</strong>
+                @if($telegramConfigured)
+                    <span class="badge badge-green">Terhubung</span>
+                @else
+                    <span class="badge badge-amber">Belum Diisi</span>
+                @endif
+            </li>
         </ul>
 
-        <form method="POST" action="{{ route('settings.test-gemini') }}" style="margin-top:1rem;">
-            @csrf
-            <button class="btn" type="submit">Test Koneksi Gemini API</button>
-        </form>
+        <div style="display:flex; gap:0.5rem; flex-wrap:wrap; margin-top:1rem;">
+            <form method="POST" action="{{ route('settings.test-gemini') }}">
+                @csrf
+                <button class="btn" type="submit">Test Koneksi Gemini API</button>
+            </form>
+            <form method="POST" action="{{ route('settings.test-telegram') }}">
+                @csrf
+                <button class="btn" type="submit">Test Kirim Telegram</button>
+            </form>
+            <form method="POST" action="{{ route('settings.run-monitor') }}">
+                @csrf
+                <button class="btn btn-primary" type="submit">Jalankan Auto-Monitor Sekarang</button>
+            </form>
+        </div>
     </div>
 </div>
 @endsection

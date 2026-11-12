@@ -14,5 +14,8 @@ chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
 php /var/www/html/artisan config:clear || true
 php /var/www/html/artisan route:cache || true
 
+# Run Laravel scheduler in background for 5-minute auto-scan & SL/TP Telegram alerts
+php /var/www/html/artisan schedule:work >> /var/www/html/storage/logs/scheduler.log 2>&1 &
+
 exec apache2-foreground
 

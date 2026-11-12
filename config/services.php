@@ -40,4 +40,13 @@ return [
         'model' => env('GEMINI_MODEL', 'gemini-3.8-flash'),
     ],
 
+    'telegram' => [
+        'bot_token' => env('TELEGRAM_BOT_TOKEN'),
+        'chat_id' => env('TELEGRAM_CHAT_ID'),
+    ],
+
+    'cron' => [
+        'token' => env('CRON_SECRET_TOKEN'),
+    ],
+
 ];

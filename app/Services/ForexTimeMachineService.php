@@ -21,14 +21,66 @@ class ForexTimeMachineService
         int $seed = 19,
         int $horizonBars = 72 // 6 hours of 5m bars
     ): SimulationRun {
-        $meta = $this->market->getPairMeta($plan->pair);
-        $data = $this->market->fetchBars($plan->pair, '5m', '30d');
+        $computed = $this->computeSimulation(
+            $plan->pair,
+            $plan->side,
+            (float) $plan->entry_price,
+            (float) $plan->stop_loss,
+            (float) $plan->take_profit,
+            $replays,
+            $seed,
+            $horizonBars
+        );
+
+        $histStats = $this->runHistoricalRuleCheck($computed['sessions'], $plan, $computed['risk']);
+
+        return SimulationRun::create(array_merge($computed['record'], [
+            'trade_plan_id' => (string) $plan->_id,
+            'history_stats' => $histStats,
+            'ai_verdict' => null,
+        ]));
+    }
+
+    /**
+     * Fast in-memory Monte Carlo evaluation for automated scanner alerts (no DB write).
+     *
+     * @return array{target_first_pct: float, stop_first_pct: float, expected_r: float, verdict: string}
+     */
+    public function quickEvaluate(
+        string $pair,
+        string $side,
+        float $entry,
+        float $stop,
+        float $target,
+        int $replays = 2500,
+        int $seed = 19
+    ): array {
+        $computed = $this->computeSimulation($pair, $side, $entry, $stop, $target, $replays, $seed, 72);
+        $rec = $computed['record'];
+
+        return [
+            'target_first_pct' => $rec['target_first_pct'],
+            'stop_first_pct' => $rec['stop_first_pct'],
+            'expected_r' => $rec['expected_r'],
+            'verdict' => $rec['verdict'],
+        ];
+    }
+
+    private function computeSimulation(
+        string $pair,
+        string $side,
+        float $entry,
+        float $stop,
+        float $target,
+        int $replays,
+        int $seed,
+        int $horizonBars
+    ): array {
+        $meta = $this->market->getPairMeta($pair);
+        $data = $this->market->fetchBars($pair, '5m', '30d');
         $bars = $data['bars'];
 
-        $entry = (float) $plan->entry_price;
-        $stop = (float) $plan->stop_loss;
-        $target = (float) $plan->take_profit;
-        $isBuy = $plan->side === 'buy';
+        $isBuy = $side === 'buy';
         $risk = abs($entry - $stop);
         $rewardR = $risk > 0 ? abs($target - $entry) / $risk : 1.0;
 
@@ -211,39 +263,37 @@ class ForexTimeMachineService
             ];
         }
 
-        // Historical backtest on actual past windows
-        $histStats = $this->runHistoricalRuleCheck($sessions, $plan, $risk);
-
-        return SimulationRun::create([
-            'trade_plan_id' => (string) $plan->_id,
-            'pair' => $plan->pair,
-            'side' => $plan->side,
-            'entry_price' => $entry,
-            'stop_loss' => $stop,
-            'take_profit' => $target,
-            'replays' => $replays,
-            'seed' => $seed,
-            'sessions_used' => count($sessions),
-            'target_first_pct' => $targetPct,
-            'stop_first_pct' => $stopPct,
-            'neither_pct' => $neitherPct,
-            'green_pct' => $greenPct,
-            'expected_r' => $expectedR,
-            'breakeven_win_pct' => $breakevenPct,
-            'verdict' => $verdict,
-            'percentiles' => [
-                'p05' => $pct($endPrices, 0.05),
-                'p25' => $pct($endPrices, 0.25),
-                'p50' => $pct($endPrices, 0.50),
-                'p75' => $pct($endPrices, 0.75),
-                'p95' => $pct($endPrices, 0.95),
+        return [
+            'sessions' => $sessions,
+            'risk' => $risk,
+            'record' => [
+                'pair' => $pair,
+                'side' => $side,
+                'entry_price' => $entry,
+                'stop_loss' => $stop,
+                'take_profit' => $target,
+                'replays' => $replays,
+                'seed' => $seed,
+                'sessions_used' => count($sessions),
+                'target_first_pct' => $targetPct,
+                'stop_first_pct' => $stopPct,
+                'neither_pct' => $neitherPct,
+                'green_pct' => $greenPct,
+                'expected_r' => $expectedR,
+                'breakeven_win_pct' => $breakevenPct,
+                'verdict' => $verdict,
+                'percentiles' => [
+                    'p05' => $pct($endPrices, 0.05),
+                    'p25' => $pct($endPrices, 0.25),
+                    'p50' => $pct($endPrices, 0.50),
+                    'p75' => $pct($endPrices, 0.75),
+                    'p95' => $pct($endPrices, 0.95),
+                ],
+                'fan_series' => $fanSeries,
+                'sample_paths' => $samplePaths,
+                'histogram' => $this->buildHistogram($endPrices, 16, $meta['decimals']),
             ],
-            'fan_series' => $fanSeries,
-            'sample_paths' => $samplePaths,
-            'histogram' => $this->buildHistogram($endPrices, 16, $meta['decimals']),
-            'history_stats' => $histStats,
-            'ai_verdict' => null,
-        ]);
+        ];
     }
 
     private function runHistoricalRuleCheck(array $sessions, TradePlan $plan, float $risk): array
