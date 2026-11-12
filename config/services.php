@@ -53,4 +53,8 @@ return [
         'api_key' => env('TWELVE_DATA_API_KEY'),
     ],
 
+    'mt5' => [
+        'bridge_token' => env('MT5_BRIDGE_TOKEN'),
+    ],
+
 ];

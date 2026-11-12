@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Mt5Order;
 use App\Models\PaperOrder;
 use App\Models\PriceAlert;
 use App\Models\TraderSetting;
@@ -32,6 +33,8 @@ class ForexAutoMonitorService
             'alerts_sent' => 0,
             'errors' => [],
         ];
+
+        $this->pollTelegramCallbacks();
 
         $sessions = $this->market->getActiveSessions();
         if (!$forceScan && !($sessions['market_open'] ?? true)) {
@@ -204,16 +207,48 @@ class ForexAutoMonitorService
             }
 
             if ($this->telegram->isConfigured()) {
+                $riskPips = max(1.0, $this->market->toPips($pair, $risk));
+                $pipValueStd = max(0.1, $this->market->pipValuePerStandardLot($pair, $entry));
+                $maxLossUsd = max(1.0, (float) ($settings->max_loss_per_trade_usd ?? 100));
+                $lots = max(0.01, min(10.0, round($maxLossUsd / ($riskPips * $pipValueStd), 2)));
+                $mt5Symbol = str_replace('/', '', $pair);
+
+                $mt5Order = Mt5Order::create([
+                    'pair' => $pair,
+                    'mt5_symbol' => $mt5Symbol,
+                    'side' => $side,
+                    'lots' => $lots,
+                    'entry_price' => $entry,
+                    'stop_loss' => $stop,
+                    'take_profit' => $target,
+                    'setup' => $hit['setup'],
+                    'score' => (int) $hit['score'],
+                    'expected_r' => (float) $mc['expected_r'],
+                    'target_first_pct' => (float) $mc['target_first_pct'],
+                    'status' => 'awaiting_approval',
+                    'expires_at' => now()->addMinutes(15),
+                ]);
+
                 $kzTag = !empty($hit['killzone']) ? ' | Killzone ✓' : '';
                 $msg = "🚨 <b>PELUANG ENTRY BER-EDGE — {$pair} (" . strtoupper($side) . ")</b>\n"
                     . "Setup: <b>{$hit['setup']}</b>\n"
                     . "Scanner Score: <b>{$hit['score']}/99</b> | Trend: {$hit['trend_bias']}{$kzTag}\n"
                     . "Monte Carlo: <b>{$mc['target_first_pct']}%</b> (Expected: <b>{$mc['expected_r']}R</b>)\n"
                     . "Entry: <code>{$entry}</code> | SL: <code>{$stop}</code> | TP: <code>{$target}</code>\n"
-                    . "<i>Sesi: {$scan->session} | Feed: {$priceSource}</i>";
+                    . "Ukuran Lot: <b>{$lots} lot</b> (Max Risk \${$maxLossUsd})\n"
+                    . "<i>Sesi: {$scan->session} | Feed: {$priceSource} | Berlaku 15 menit</i>";
 
-                $sent = $this->telegram->sendMessage($msg);
+                $buttons = [[
+                    ['text' => "✅ SETUJUI ENTRY ({$lots} lot)", 'callback_data' => "mt5_approve:{$mt5Order->_id}"],
+                    ['text' => '❌ TOLAK', 'callback_data' => "mt5_reject:{$mt5Order->_id}"],
+                ]];
+
+                $sent = $this->telegram->sendMessage($msg, $buttons);
                 if ($sent['ok']) {
+                    if (!empty($sent['message_id'])) {
+                        $mt5Order->telegram_message_id = $sent['message_id'];
+                        $mt5Order->save();
+                    }
                     Cache::put($cooldownKey, true, now()->addMinutes(60));
                     $summary['alerts_sent']++;
                 } elseif ($sent['error']) {
@@ -221,6 +256,86 @@ class ForexAutoMonitorService
                 }
             }
         }
+    }
+
+    /**
+     * Poll Telegram callback_query updates so Approve/Reject buttons work over plain HTTP without HTTPS webhook.
+     */
+    public function pollTelegramCallbacks(): int
+    {
+        if (!$this->telegram->isConfigured()) {
+            return 0;
+        }
+
+        $allowedChatId = TraderSetting::current()->resolvedTelegramChatId();
+        $lastUpdateId = (int) Cache::get('tg_last_update_id', 0);
+        $updates = $this->telegram->getUpdates($lastUpdateId > 0 ? $lastUpdateId + 1 : 0);
+        $processed = 0;
+
+        foreach ($updates as $upd) {
+            $updateId = (int) ($upd['update_id'] ?? 0);
+            if ($updateId > $lastUpdateId) {
+                $lastUpdateId = $updateId;
+                Cache::put('tg_last_update_id', $lastUpdateId, now()->addDays(7));
+            }
+
+            $cb = $upd['callback_query'] ?? null;
+            if (!$cb) {
+                continue;
+            }
+
+            $cbId = (string) ($cb['id'] ?? '');
+            $fromChatId = (string) ($cb['message']['chat']['id'] ?? $cb['from']['id'] ?? '');
+            $data = (string) ($cb['data'] ?? '');
+
+            if ($fromChatId !== $allowedChatId) {
+                $this->telegram->answerCallbackQuery($cbId, 'Akses ditolak.');
+                continue;
+            }
+
+            if (!str_contains($data, ':')) {
+                continue;
+            }
+
+            [$action, $orderId] = explode(':', $data, 2);
+            $order = Mt5Order::find($orderId);
+            if (!$order) {
+                $this->telegram->answerCallbackQuery($cbId, 'Order tidak ditemukan.');
+                continue;
+            }
+
+            if ($order->status !== 'awaiting_approval') {
+                $this->telegram->answerCallbackQuery($cbId, "Order sudah berstatus: {$order->status}");
+                continue;
+            }
+
+            if ($action === 'mt5_approve') {
+                if ($order->expires_at && $order->expires_at->isPast()) {
+                    $order->status = 'expired';
+                    $order->save();
+                    $this->telegram->answerCallbackQuery($cbId, 'Sinyal sudah kedaluwarsa (>15 menit).');
+                    $this->telegram->sendMessage("⏰ <b>Kedaluwarsa:</b> Sinyal {$order->pair} (" . strtoupper($order->side) . ") melewati batas 15 menit dan dibatalkan.");
+                    continue;
+                }
+
+                $order->status = 'approved';
+                $order->approved_at = now();
+                $order->save();
+                $processed++;
+
+                $this->telegram->answerCallbackQuery($cbId, 'Disetujui! Mengirim ke MT5...');
+                $this->telegram->sendMessage("⏳ <b>DISETUJUI:</b> {$order->pair} " . strtoupper($order->side) . " ({$order->lots} lot)\nMenunggu EA MT5 Finex mengeksekusi...");
+            } elseif ($action === 'mt5_reject') {
+                $order->status = 'rejected';
+                $order->save();
+                $processed++;
+
+                $this->telegram->answerCallbackQuery($cbId, 'Order ditolak.');
+                $this->telegram->sendMessage("❌ <b>DITOLAK:</b> Setup {$order->pair} (" . strtoupper($order->side) . ") dibatalkan.");
+            }
+        }
+
+        return $processed;
     }
 }
 

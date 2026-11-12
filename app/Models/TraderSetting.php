@@ -31,6 +31,7 @@ class TraderSetting extends Model
         'auto_scan_min_prob',
         'auto_close_on_hit',
         'twelve_data_api_key',
+        'mt5_bridge_token',
     ];
 
     public static function current(): self
@@ -62,6 +63,7 @@ class TraderSetting extends Model
             'auto_scan_min_prob' => 55,
             'auto_close_on_hit' => true,
             'twelve_data_api_key' => '',
+            'mt5_bridge_token' => '',
         ]);
     }
 
@@ -103,6 +105,16 @@ class TraderSetting extends Model
         }
 
         return trim((string) config('services.twelvedata.api_key', ''));
+    }
+
+    public function resolvedMt5BridgeToken(): string
+    {
+        $dbToken = trim((string) ($this->mt5_bridge_token ?? ''));
+        if ($dbToken !== '') {
+            return $dbToken;
+        }
+
+        return trim((string) config('services.mt5.bridge_token', ''));
     }
 }
 

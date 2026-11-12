@@ -72,6 +72,7 @@ Route::middleware('auth')->group(function () {
             Route::post('/test-gemini', [SettingsController::class, 'testGemini'])->name('test-gemini');
             Route::post('/test-telegram', [SettingsController::class, 'testTelegram'])->name('test-telegram');
             Route::post('/run-monitor', [SettingsController::class, 'runMonitor'])->name('run-monitor');
+            Route::get('/download-ea', [SettingsController::class, 'downloadEa'])->name('download-ea');
         });
 
         Route::prefix('accounts')->name('accounts.')->group(function () {
@@ -95,3 +96,11 @@ Route::get('/cron/monitor', function (\Illuminate\Http\Request $request, \App\Se
 
     return response()->json(['ok' => true, 'summary' => $monitor->run()]);
 })->name('cron.monitor');
+
+// MT5 Expert Advisor Bridge API (token-protected, CSRF-exempt)
+Route::prefix('api/mt5')
+    ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\PreventRequestForgery::class])
+    ->group(function () {
+        Route::get('/pending', [\App\Http\Controllers\Mt5BridgeController::class, 'pending'])->name('mt5.pending');
+        Route::post('/report', [\App\Http\Controllers\Mt5BridgeController::class, 'report'])->name('mt5.report');
+    });

@@ -14,6 +14,10 @@ class SettingsController extends Controller
     public function index(GeminiService $gemini, TelegramService $telegram)
     {
         $settings = TraderSetting::current();
+        if ($settings->resolvedMt5BridgeToken() === '') {
+            $settings->mt5_bridge_token = bin2hex(random_bytes(16));
+            $settings->save();
+        }
         $rawKey = $settings->resolvedGeminiKey();
         $maskedKey = $rawKey !== '' ? substr($rawKey, 0, 6) . str_repeat('*', max(4, strlen($rawKey) - 10)) . substr($rawKey, -4) : '';
 
@@ -42,6 +46,7 @@ class SettingsController extends Controller
             'telegram_bot_token' => 'nullable|string|max:255',
             'telegram_chat_id' => 'nullable|string|max:80',
             'twelve_data_api_key' => 'nullable|string|max:255',
+            'mt5_bridge_token' => 'nullable|string|max:255',
             'auto_scan_min_score' => 'nullable|integer|min:10|max:99',
             'auto_scan_min_prob' => 'nullable|numeric|min:10|max:95',
             'blocked_pairs' => 'nullable|array',
@@ -72,6 +77,9 @@ class SettingsController extends Controller
         }
         if (!empty($data['twelve_data_api_key'])) {
             $settings->twelve_data_api_key = trim($data['twelve_data_api_key']);
+        }
+        if (!empty($data['mt5_bridge_token'])) {
+            $settings->mt5_bridge_token = trim($data['mt5_bridge_token']);
         }
         if (array_key_exists('telegram_chat_id', $data) && $data['telegram_chat_id'] !== null) {
             $settings->telegram_chat_id = trim((string) $data['telegram_chat_id']);
@@ -117,6 +125,14 @@ class SettingsController extends Controller
         }
 
         return redirect()->route('settings.index')->with('status', $msg);
+    }
+
+    public function downloadEa()
+    {
+        $path = resource_path('mt5/ForexDayTraderTelegramEA.mq5');
+        abort_unless(file_exists($path), 404);
+
+        return response()->download($path, 'ForexDayTraderTelegramEA.mq5');
     }
 }
 

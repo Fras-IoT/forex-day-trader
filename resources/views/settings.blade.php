@@ -115,6 +115,13 @@
                 </label>
             </div>
 
+            <hr style="border:0; border-top:1px solid var(--border); margin:1rem 0;">
+            <h3 style="margin-top:0;">MT5 Expert Advisor Bridge (Persetujuan Telegram)</h3>
+            <div style="margin-bottom:0.85rem;">
+                <label for="mt5_bridge_token">MT5 Bridge Token (Masukkan ke Input EA MT5)</label>
+                <input id="mt5_bridge_token" name="mt5_bridge_token" type="text" class="mono" value="{{ $settings->resolvedMt5BridgeToken() }}" readonly onclick="this.select()">
+            </div>
+
             <button class="btn btn-primary" type="submit">Simpan Pengaturan</button>
         </form>
     </div>
@@ -160,6 +167,7 @@
                 @csrf
                 <button class="btn btn-primary" type="submit">Jalankan Auto-Monitor Sekarang</button>
             </form>
+            <a class="btn" href="{{ route('settings.download-ea') }}">Download EA MT5 (.mq5)</a>
         </div>
     </div>
 </div>
