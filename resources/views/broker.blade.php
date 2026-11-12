@@ -83,6 +83,35 @@
         @else
             <p class="muted">Tidak ada ticket order yang menunggu persetujuan.</p>
         @endif
+
+        @if(isset($rejectedOrders) && $rejectedOrders->count() > 0)
+            <div style="margin-top:1.25rem; border-top:1px dashed var(--border); padding-top:1rem;">
+                <h4 style="color:var(--red); margin-bottom:0.5rem;">Ticket Ditolak Sistem (Risk Check BLOCK)</h4>
+                @foreach($rejectedOrders as $rej)
+                    <div style="border:1px solid #e53e3e33; background:rgba(229, 62, 62, 0.05); border-radius:8px; padding:0.75rem; margin-bottom:0.6rem;">
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <div>
+                                <span class="badge badge-red">BLOCKED</span>
+                                <strong>{{ strtoupper($rej->side) }} {{ $rej->pair }}</strong>
+                                <span class="mono" style="font-size:0.85rem;">(SL: {{ $rej->stop_loss }} / TP: {{ $rej->take_profit }})</span>
+                            </div>
+                            <span class="muted" style="font-size:0.75rem;">{{ $rej->created_at ? $rej->created_at->diffForHumans() : '' }}</span>
+                        </div>
+                        @if(!empty($rej->risk_checks))
+                            <ul style="margin:0.5rem 0 0 1.2rem; font-size:0.82rem;">
+                                @foreach($rej->risk_checks as $chk)
+                                    @if(($chk['status'] ?? '') === 'BLOCK')
+                                        <li style="color:var(--red); font-weight:600;">
+                                            ❌ {{ $chk['rule'] ?? 'Risk Rule' }}: <span style="font-weight:normal;">{{ $chk['detail'] ?? '' }}</span>
+                                        </li>
+                                    @endif
+                                @endforeach
+                            </ul>
+                        @endif
+                    </div>
+                @endforeach
+            </div>
+        @endif
     </div>
 </div>
 

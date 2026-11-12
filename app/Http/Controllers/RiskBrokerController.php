@@ -18,6 +18,7 @@ class RiskBrokerController extends Controller
         $selectedPlanId = request('plan_id');
         $activePlan = $selectedPlanId ? TradePlan::find($selectedPlanId) : $plans->first();
         $pendingOrders = PaperOrder::where('status', 'pending_approval')->orderBy('created_at', 'desc')->get();
+        $rejectedOrders = PaperOrder::where('status', 'rejected')->orderBy('created_at', 'desc')->take(5)->get();
         $openOrders = PaperOrder::where('status', 'open')->orderBy('created_at', 'desc')->get();
         $closedOrders = PaperOrder::where('status', 'closed')->orderBy('closed_at', 'desc')->take(15)->get();
         $settings = TraderSetting::current();
@@ -34,6 +35,7 @@ class RiskBrokerController extends Controller
             'plans' => $plans,
             'activePlan' => $activePlan,
             'pendingOrders' => $pendingOrders,
+            'rejectedOrders' => $rejectedOrders,
             'openOrders' => $openOrders,
             'closedOrders' => $closedOrders,
             'livePrices' => $livePrices,
@@ -76,9 +78,15 @@ class RiskBrokerController extends Controller
         $plan->status = 'sized';
         $plan->save();
 
-        $msg = $order->risk_status === 'PASS'
-            ? "Risk Check PASS! Ticket {$order->pair} ({$order->lots} lot) siap untuk konfirmasi eksekusi."
-            : "Risk Check BLOCK! Periksa alasan penolakan pada ticket order.";
+        if ($order->risk_status === 'PASS') {
+            $msg = "Risk Check PASS! Ticket {$order->pair} ({$order->lots} lot) siap untuk konfirmasi eksekusi.";
+        } else {
+            $failedDetails = collect($result['risk_checks'] ?? [])
+                ->where('status', 'BLOCK')
+                ->map(fn ($c) => "{$c['rule']}: {$c['detail']}")
+                ->implode(' | ');
+            $msg = "Risk Check BLOCK! Alasan penolakan: " . ($failedDetails ?: 'Melanggar parameter risiko.');
+        }
 
         return redirect()->route('broker.index', ['plan_id' => (string) $plan->_id])
             ->with($order->risk_status === 'PASS' ? 'status' : 'error', $msg);
