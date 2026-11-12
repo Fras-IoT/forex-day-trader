@@ -238,7 +238,7 @@
                 @csrf
                 <div class="field">
                     <label for="email">Email</label>
-                    <input id="email" name="email" type="email" value="{{ old('email', 'admin@forex.local') }}" required autofocus autocomplete="email">
+                    <input id="email" name="email" type="email" value="{{ old('email') }}" required autofocus autocomplete="email" placeholder="Masukkan email">
                 </div>
 
                 <div class="field">

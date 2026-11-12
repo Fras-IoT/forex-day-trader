@@ -44,3 +44,4 @@ RUN chmod +x /usr/local/bin/entrypoint.sh
 EXPOSE 8000
 
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+

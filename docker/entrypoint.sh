@@ -15,3 +15,4 @@ php /var/www/html/artisan config:clear || true
 php /var/www/html/artisan route:cache || true
 
 exec apache2-foreground
+
