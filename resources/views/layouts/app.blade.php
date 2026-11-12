@@ -437,9 +437,23 @@
 </head>
 <body>
 <header class="topbar">
-    <div class="brand">
-        <span>FX</span>
-        <span>Forex Day Trader AI</span>
+    <div style="display:flex; align-items:center; gap:0.75rem; flex-wrap:wrap;">
+        <div class="brand">
+            <span>FX</span>
+            <span>Forex Day Trader AI</span>
+        </div>
+        @php
+            $mt5Hb = \Illuminate\Support\Facades\Cache::get('mt5_bridge_heartbeat');
+            $mt5Conn = $mt5Hb && (time() - $mt5Hb < 25);
+            $mt5Trade = (bool) \Illuminate\Support\Facades\Cache::get('mt5_trade_allowed', true);
+        @endphp
+        <span id="mt5-global-status-pill"
+              class="badge {{ $mt5Conn ? ($mt5Trade ? 'badge-green' : 'badge-amber') : 'badge-red' }}"
+              style="display:inline-flex; align-items:center; gap:0.4rem; padding:0.22rem 0.6rem; font-size:0.76rem; border-radius:999px; transition:all 0.3s ease; user-select:none;"
+              title="{{ $mt5Conn ? 'Aplikasi MT5 terbuka dan harga tersinkron langsung dari Finex!' : 'Aplikasi MT5 tertutup/offline. Buka aplikasi MT5 Anda untuk menyinkronkan harga live & eksekusi.' }}">
+            <span id="mt5-status-dot" style="display:inline-block; width:8px; height:8px; border-radius:50%; background:{{ $mt5Conn ? ($mt5Trade ? '#10b981' : '#f59e0b') : '#ef4444' }}; box-shadow:0 0 6px {{ $mt5Conn ? ($mt5Trade ? '#10b981' : '#f59e0b') : '#ef4444' }};"></span>
+            <span id="mt5-status-label">{{ $mt5Conn ? ($mt5Trade ? 'MT5 Connected (Finex Live)' : 'MT5 Standby (Algo Mati)') : 'MT5 Disconnected' }}</span>
+        </span>
     </div>
     <nav class="nav" aria-label="Main navigation">
         <a href="{{ route('dashboard') }}" class="{{ request()->routeIs('dashboard') ? 'active' : '' }}">Dashboard</a>
@@ -486,21 +500,47 @@
 
 <script>
 (() => {
+    const pill = document.getElementById('mt5-global-status-pill');
+    const dot = document.getElementById('mt5-status-dot');
+    const label = document.getElementById('mt5-status-label');
     const els = Array.from(document.querySelectorAll('[data-live-pair]'));
-    if (!els.length) return;
-
-    const pairs = [...new Set(els.map(el => el.dataset.livePair))];
+    const pairs = els.length ? [...new Set(els.map(el => el.dataset.livePair))] : [];
     const statusEl = document.getElementById('live-price-status');
 
-    async function refreshPrices() {
+    async function checkMt5AndPrices() {
         try {
-            const res = await fetch('/live-prices?pairs=' + encodeURIComponent(pairs.join(',')), {
-                headers: { 'Accept': 'application/json' }
-            });
+            const url = '/live-prices' + (pairs.length ? '?pairs=' + encodeURIComponent(pairs.join(',')) : '');
+            const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
             if (!res.ok) return;
             const data = await res.json();
-            const quotes = data.quotes || {};
 
+            // Update MT5 Connection Indicator Sign
+            if (data.mt5 && pill && dot && label) {
+                if (data.mt5.connected) {
+                    if (data.mt5.trade_allowed) {
+                        pill.className = 'badge badge-green';
+                        dot.style.background = '#10b981';
+                        dot.style.boxShadow = '0 0 6px #10b981';
+                        label.textContent = 'MT5 Connected (Finex Live)';
+                        pill.title = 'Aplikasi MT5 terbuka dan harga live tersinkron langsung dari Finex.';
+                    } else {
+                        pill.className = 'badge badge-amber';
+                        dot.style.background = '#f59e0b';
+                        dot.style.boxShadow = '0 0 6px #f59e0b';
+                        label.textContent = 'MT5 Standby (Algo Mati)';
+                        pill.title = 'MT5 terbuka, tetapi tombol Algo Trading di MT5 sedang mati!';
+                    }
+                } else {
+                    pill.className = 'badge badge-red';
+                    dot.style.background = '#ef4444';
+                    dot.style.boxShadow = '0 0 6px #ef4444';
+                    label.textContent = 'MT5 Disconnected';
+                    pill.title = 'Aplikasi MT5 tertutup atau offline. Buka aplikasi MT5 Anda.';
+                }
+            }
+
+            // Update live price elements on page if any
+            const quotes = data.quotes || {};
             for (const el of els) {
                 const q = quotes[el.dataset.livePair];
                 if (!q) continue;
@@ -516,14 +556,16 @@
                 el.textContent = formatted;
             }
             if (statusEl && data.server_time) {
-                statusEl.textContent = 'Live (' + data.server_time + ')';
+                const sourceTag = data.mt5 && data.mt5.connected ? ' • MT5 Finex' : '';
+                statusEl.textContent = 'Live (' + data.server_time + sourceTag + ')';
             }
         } catch (_) {
-            // Silent retry on next tick
+            // Silent retry
         }
     }
 
-    setInterval(refreshPrices, 5000);
+    setInterval(checkMt5AndPrices, 4000);
+    setTimeout(checkMt5AndPrices, 800);
 })();
 </script>
 

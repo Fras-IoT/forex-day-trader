@@ -101,6 +101,6 @@ Route::get('/cron/monitor', function (\Illuminate\Http\Request $request, \App\Se
 Route::prefix('api/mt5')
     ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\PreventRequestForgery::class])
     ->group(function () {
-        Route::get('/pending', [\App\Http\Controllers\Mt5BridgeController::class, 'pending'])->name('mt5.pending');
+        Route::match(['get', 'post'], '/pending', [\App\Http\Controllers\Mt5BridgeController::class, 'pending'])->name('mt5.pending');
         Route::post('/report', [\App\Http\Controllers\Mt5BridgeController::class, 'report'])->name('mt5.report');
     });

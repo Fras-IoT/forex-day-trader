@@ -67,9 +67,22 @@ class ScannerController extends Controller
         $pairsParam = $request->query('pairs');
         $pairs = $pairsParam ? array_filter(array_map('trim', explode(',', (string) $pairsParam))) : null;
 
+        $heartbeat = \Illuminate\Support\Facades\Cache::get('mt5_bridge_heartbeat');
+        $isConnected = $heartbeat && (time() - $heartbeat < 25);
+        $tradeAllowed = (bool) \Illuminate\Support\Facades\Cache::get('mt5_trade_allowed', true);
+
         return response()->json([
             'quotes' => $market->getLiveQuotes($pairs),
             'server_time' => now()->setTimezone('Asia/Jakarta')->format('H:i:s') . ' WIB',
+            'mt5' => [
+                'connected' => (bool) $isConnected,
+                'trade_allowed' => $tradeAllowed,
+                'last_seen_seconds_ago' => $heartbeat ? (time() - $heartbeat) : null,
+                'source' => $isConnected ? 'mt5_finex_live' : 'external_fallback',
+                'label' => $isConnected
+                    ? ($tradeAllowed ? 'MT5 Finex Live' : 'MT5 Standby (Algo Mati)')
+                    : 'MT5 Disconnected',
+            ],
         ]);
     }
 }

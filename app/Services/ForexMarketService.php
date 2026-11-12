@@ -118,6 +118,23 @@ class ForexMarketService
     public function getLatestPrice(string $pair, bool $preferSpot = false): array
     {
         $meta = $this->getPairMeta($pair);
+
+        // Priority 1: Direct live quote from connected Finex MT5 terminal
+        $mt5Heartbeat = Cache::get('mt5_bridge_heartbeat');
+        if ($mt5Heartbeat && (time() - $mt5Heartbeat < 25)) {
+            $mt5Quotes = (array) Cache::get('mt5_live_quotes', []);
+            if (isset($mt5Quotes[$meta['pair']])) {
+                $q = $mt5Quotes[$meta['pair']];
+                return [
+                    'pair' => $meta['pair'],
+                    'price' => round((float) $q['price'], $meta['decimals']),
+                    'prev_close' => round((float) $q['price'], $meta['decimals']),
+                    'source' => 'mt5_finex_live',
+                    'timestamp' => $q['timestamp'] ?? time(),
+                ];
+            }
+        }
+
         $useSpot = $preferSpot || $meta['pair'] === 'XAU/USD';
         if ($useSpot) {
             $tdKey = $this->resolvedTwelveDataKey();
@@ -157,9 +174,29 @@ class ForexMarketService
         $targets = $pairs ?: array_keys(self::PAIRS);
         $quotes = [];
 
+        // Priority 1: Direct live quotes streamed from connected Finex MT5 terminal
+        $mt5Heartbeat = Cache::get('mt5_bridge_heartbeat');
+        $mt5IsLive = $mt5Heartbeat && (time() - $mt5Heartbeat < 25);
+        if ($mt5IsLive) {
+            $mt5Quotes = (array) Cache::get('mt5_live_quotes', []);
+            foreach ($targets as $pair) {
+                $meta = $this->getPairMeta($pair);
+                if (isset($mt5Quotes[$meta['pair']])) {
+                    $q = $mt5Quotes[$meta['pair']];
+                    $quotes[$meta['pair']] = [
+                        'pair' => $meta['pair'],
+                        'price' => round((float) $q['price'], $meta['decimals']),
+                        'decimals' => $meta['decimals'],
+                        'source' => 'mt5_finex_live',
+                        'timestamp' => $q['timestamp'] ?? time(),
+                    ];
+                }
+            }
+        }
+
         // Always fetch XAU/USD Spot from Twelve Data (1 credit, cached 90s) so Gold matches Finex Spot
         $hasGold = in_array('XAU/USD', array_map(fn ($p) => $this->getPairMeta($p)['pair'], $targets), true);
-        if ($hasGold) {
+        if ($hasGold && !isset($quotes['XAU/USD'])) {
             $tdKey = $this->resolvedTwelveDataKey();
             if ($tdKey !== '' && !Cache::get('twelvedata_cooldown')) {
                 $tdQuotes = $this->fetchTwelveDataBatchQuotes(['XAU/USD'], $tdKey);

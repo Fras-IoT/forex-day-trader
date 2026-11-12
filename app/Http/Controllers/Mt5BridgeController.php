@@ -24,12 +24,48 @@ class Mt5BridgeController extends Controller
     }
 
     /**
-     * Polled every ~5s by MT5 Expert Advisor. Also checks Telegram Approve/Reject button clicks.
+     * Polled every ~5s by MT5 Expert Advisor. Also receives live quotes and checks Telegram Approve/Reject clicks.
      */
     public function pending(Request $request, ForexAutoMonitorService $monitor)
     {
         if ($err = $this->authorizeBridge($request)) {
             return $err;
+        }
+
+        // Record heartbeat & trade allowed state from MT5 terminal
+        $nowTs = time();
+        Cache::put('mt5_bridge_heartbeat', $nowTs, 30);
+        if ($request->has('trade_allowed')) {
+            Cache::put('mt5_trade_allowed', (bool) $request->input('trade_allowed'), 30);
+        }
+
+        // Store live quotes pushed directly from Finex MT5
+        $quotes = $request->input('quotes');
+        if (is_array($quotes) && !empty($quotes)) {
+            $formatted = Cache::get('mt5_live_quotes', []);
+            if (!is_array($formatted)) {
+                $formatted = [];
+            }
+            foreach ($quotes as $rawSym => $data) {
+                $sym = strtoupper(trim((string) $rawSym));
+                $pair = strlen($sym) === 6 ? substr($sym, 0, 3) . '/' . substr($sym, 3, 3) : (str_starts_with($sym, 'XAU') ? 'XAU/USD' : $sym);
+                $price = is_array($data) ? (float) ($data['price'] ?? $data['bid'] ?? 0) : (float) $data;
+                $bid = is_array($data) ? (float) ($data['bid'] ?? $price) : $price;
+                $ask = is_array($data) ? (float) ($data['ask'] ?? $price) : $price;
+                if ($price > 0) {
+                    $formatted[$pair] = [
+                        'pair' => $pair,
+                        'price' => $price,
+                        'bid' => $bid,
+                        'ask' => $ask,
+                        'source' => 'mt5_finex_live',
+                        'timestamp' => $nowTs,
+                    ];
+                }
+            }
+            if (!empty($formatted)) {
+                Cache::put('mt5_live_quotes', $formatted, 30);
+            }
         }
 
         if (Cache::add('tg_poll_lock', true, 3)) {
@@ -111,6 +147,24 @@ class Mt5BridgeController extends Controller
         }
 
         return response()->json(['ok' => true]);
+    }
+
+    /**
+     * Public / web status indicator endpoint to check if MT5 terminal is open and sending quotes.
+     */
+    public function status()
+    {
+        $heartbeat = Cache::get('mt5_bridge_heartbeat');
+        $isConnected = $heartbeat && (time() - $heartbeat < 20);
+        $tradeAllowed = (bool) Cache::get('mt5_trade_allowed', true);
+
+        return response()->json([
+            'ok' => true,
+            'connected' => (bool) $isConnected,
+            'trade_allowed' => $tradeAllowed,
+            'last_seen_seconds_ago' => $heartbeat ? (time() - $heartbeat) : null,
+            'quotes_count' => count((array) Cache::get('mt5_live_quotes', [])),
+        ]);
     }
 }
 

@@ -3,7 +3,7 @@
 //|        Human-in-the-Loop Telegram Approval EA for MT5 Finex      |
 //+------------------------------------------------------------------+
 #property copyright "Forex Day Trader AI"
-#property version   "1.00"
+#property version   "1.10"
 #property strict
 
 #include <Trade\Trade.mqh>
@@ -14,7 +14,7 @@ input string InpSymbolSuffix     = "";                          // Akhiran symbo
 input int    InpPollSeconds      = 5;                           // Interval cek order disetujui (detik)
 input ulong  InpMagicNumber      = 20261112;                    // Magic Number EA
 input int    InpDeviationPoints  = 30;                          // Max Slippage (points)
-input bool   InpAutoExecute      = true;                        // Eksekusi saat disetujui di Telegram
+input bool   InpAutoExecute      = true;                        // Eksekusi saat disetujui di Telegram / Web
 
 CTrade trade;
 
@@ -31,7 +31,7 @@ int OnInit()
    trade.SetDeviationInPoints(InpDeviationPoints);
    EventSetTimer(MathMax(2, InpPollSeconds));
 
-   Print("ForexDayTraderTelegramEA aktif. Polling ke: ", InpServerUrl);
+   Print("ForexDayTraderTelegramEA aktif. Streaming harga & polling ke: ", InpServerUrl);
    return(INIT_SUCCEEDED);
 }
 
@@ -42,24 +42,62 @@ void OnDeinit(const int reason)
 }
 
 //+------------------------------------------------------------------+
+string BuildQuotesPayload()
+{
+   string pairs[] = {"EURUSD", "GBPUSD", "USDJPY", "AUDUSD", "USDCHF", "USDCAD", "NZDUSD", "EURGBP", "EURJPY", "GBPJPY", "XAUUSD"};
+   string q = "{";
+   bool first = true;
+   for(int i = 0; i < ArraySize(pairs); i++)
+   {
+      string p = pairs[i];
+      string sym = p + InpSymbolSuffix;
+      if(!SymbolInfoInteger(sym, SYMBOL_SELECT))
+      {
+         if(p == "XAUUSD" && SymbolInfoInteger("GOLD" + InpSymbolSuffix, SYMBOL_SELECT))
+            sym = "GOLD" + InpSymbolSuffix;
+      }
+
+      double bid = SymbolInfoDouble(sym, SYMBOL_BID);
+      double ask = SymbolInfoDouble(sym, SYMBOL_ASK);
+      if(bid > 0.0)
+      {
+         int digits = (int)SymbolInfoInteger(sym, SYMBOL_DIGITS);
+         if(!first) q += ",";
+         q += "\"" + p + "\":{\"bid\":" + DoubleToString(bid, digits) + ",\"ask\":" + DoubleToString(ask, digits) + ",\"price\":" + DoubleToString(bid, digits) + "}";
+         first = false;
+      }
+   }
+   q += "}";
+
+   string algo = TerminalInfoInteger(TERMINAL_TRADE_ALLOWED) ? "true" : "false";
+   string payload = "{\"token\":\"" + InpBridgeToken + "\",\"trade_allowed\":" + algo + ",\"quotes\":" + q + "}";
+   return payload;
+}
+
+//+------------------------------------------------------------------+
 void OnTimer()
 {
-   if(!InpAutoExecute || !TerminalInfoInteger(TERMINAL_TRADE_ALLOWED))
-      return;
-
    string url = InpServerUrl + "/api/mt5/pending?token=" + InpBridgeToken;
+   string postBody = BuildQuotesPayload();
    char post[], result[];
-   string headers = "Accept: application/json\r\nX-MT5-Token: " + InpBridgeToken + "\r\n";
+   StringToCharArray(postBody, post, 0, WHOLE_ARRAY, CP_UTF8);
+   ArrayResize(post, ArraySize(post) - 1);
+
+   string headers = "Content-Type: application/json\r\nAccept: application/json\r\nX-MT5-Token: " + InpBridgeToken + "\r\n";
    string resHeaders = "";
 
    ResetLastError();
-   int code = WebRequest("GET", url, headers, 5000, post, result, resHeaders);
+   int code = WebRequest("POST", url, headers, 4000, post, result, resHeaders);
    if(code != 200)
    {
       if(code == -1)
          Print("WebRequest gagal (Error ", GetLastError(), "). Pastikan URL ", InpServerUrl, " sudah ditambahkan di Tools -> Options -> Expert Advisors -> Allow WebRequest.");
       return;
    }
+
+   // Hanya eksekusi posisi jika fitur eksekusi aktif dan tombol Algo Trading MT5 menyala
+   if(!InpAutoExecute || !TerminalInfoInteger(TERMINAL_TRADE_ALLOWED))
+      return;
 
    string json = CharArrayToString(result, 0, WHOLE_ARRAY, CP_UTF8);
    ProcessOrdersJson(json);
