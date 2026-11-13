@@ -66,7 +66,7 @@
         @if($latestScan && !empty($latestScan->hits))
             <div tabindex="0" role="region" aria-labelledby="dash-scan-cap" class="table-wrapper">
                 <table>
-                    <caption id="dash-scan-cap">{{ $latestScan->session }} ({{ $latestScan->data_source }})</caption>
+                    <caption id="dash-scan-cap">{{ $latestScan->session }} ({{ str_replace(['yahoo_live', 'twelvedata_spot', 'synthetic_offline'], ['Live Market Feed', 'Twelve Data Spot', 'Offline Simulation'], $latestScan->data_source) }})</caption>
                     <thead>
                         <tr><th>Pair</th><th>Side</th><th>Setup</th><th>Price</th><th>Action</th></tr>
                     </thead>

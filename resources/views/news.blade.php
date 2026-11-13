@@ -40,7 +40,7 @@
             <li style="margin-bottom:0.35rem;">
                 <span class="muted mono">[{{ $h['published'] }}]</span>
                 <strong>{{ $h['title'] }}</strong>
-                <span class="muted">({{ $h['source'] }})</span>
+                <span class="muted">({{ str_replace('Yahoo Finance FX', 'Market News Feed', $h['source'] ?? '') }})</span>
             </li>
         @endforeach
     </ul>

@@ -77,7 +77,7 @@ class ForexNewsService
                             'title' => (string) $item->title,
                             'link' => (string) $item->link,
                             'published' => gmdate('Y-m-d H:i', strtotime((string) $item->pubDate)) . ' UTC',
-                            'source' => 'Yahoo Finance FX',
+                            'source' => 'Market News Feed',
                         ];
                         if (count($items) >= 6) {
                             break;

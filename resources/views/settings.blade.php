@@ -79,7 +79,7 @@
             <h3 style="margin-top:0;">Sumber Harga Spot (Twelve Data — Mendekati MT5 Finex)</h3>
             <div style="margin-bottom:0.85rem;">
                 <label for="twelve_data_api_key">Twelve Data API Key (Gratis di twelvedata.com)</label>
-                <input id="twelve_data_api_key" name="twelve_data_api_key" type="password" placeholder="{{ $settings->resolvedTwelveDataKey() !== '' ? 'API Key tersimpan (Spot Aktif)' : 'Masukkan API key Twelve Data (kosong = pakai Yahoo Finance)' }}">
+                <input id="twelve_data_api_key" name="twelve_data_api_key" type="password" placeholder="{{ $settings->resolvedTwelveDataKey() !== '' ? 'API Key tersimpan (Spot Aktif)' : 'Masukkan API key Twelve Data (kosong = pakai Live Market Feed)' }}">
             </div>
 
             <hr style="border:0; border-top:1px solid var(--border); margin:1rem 0;">
@@ -146,10 +146,16 @@
                 @endif
             </li>
             <li><strong>Price Feed:</strong>
-                @if($settings->resolvedTwelveDataKey() !== '')
+                @php
+                    $mt5Hb = \Illuminate\Support\Facades\Cache::get('mt5_bridge_heartbeat');
+                    $mt5Conn = $mt5Hb && (time() - $mt5Hb < 25);
+                @endphp
+                @if($mt5Conn)
+                    <span class="badge badge-green">MT5 Finex Live</span>
+                @elseif($settings->resolvedTwelveDataKey() !== '')
                     <span class="badge badge-green">Twelve Data Spot</span>
                 @else
-                    <span class="badge badge-amber">Yahoo Finance (Fallback)</span>
+                    <span class="badge badge-brand">Live Market Feed</span>
                 @endif
             </li>
         </ul>
