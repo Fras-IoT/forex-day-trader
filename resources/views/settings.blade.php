@@ -160,14 +160,16 @@
             </li>
         </ul>
 
+        <div id="settings-ajax-alert" style="display:none; margin-top:1rem;" class="alert-banner"></div>
+
         <div style="display:flex; gap:0.5rem; flex-wrap:wrap; margin-top:1rem;">
-            <form method="POST" action="{{ route('settings.test-gemini') }}">
+            <form id="form-test-gemini" method="POST" action="{{ route('settings.test-gemini') }}">
                 @csrf
-                <button class="btn" type="submit">Test Koneksi Gemini API</button>
+                <button id="btn-test-gemini" class="btn" type="submit">Test Koneksi Gemini API</button>
             </form>
-            <form method="POST" action="{{ route('settings.test-telegram') }}">
+            <form id="form-test-telegram" method="POST" action="{{ route('settings.test-telegram') }}">
                 @csrf
-                <button class="btn" type="submit">Test Kirim Telegram</button>
+                <button id="btn-test-telegram" class="btn" type="submit">Test Kirim Telegram</button>
             </form>
             <form method="POST" action="{{ route('settings.run-monitor') }}">
                 @csrf
@@ -177,5 +179,48 @@
         </div>
     </div>
 </div>
+
+<script>
+(() => {
+    const alertBox = document.getElementById('settings-ajax-alert');
+
+    function bindAjaxTest(formId, btnId, loadingText, defaultText) {
+        const form = document.getElementById(formId);
+        const btn = document.getElementById(btnId);
+        if (!form || !btn) return;
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            btn.disabled = true;
+            btn.textContent = loadingText;
+            if (alertBox) alertBox.style.display = 'none';
+
+            try {
+                const res = await fetch(form.action, {
+                    method: 'POST',
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': form.querySelector('input[name="_token"]').value
+                    }
+                });
+                const data = await res.json();
+                if (alertBox) {
+                    alertBox.className = 'alert-banner ' + (data.ok ? 'alert-ok' : 'alert-err');
+                    alertBox.textContent = data.message || (data.ok ? 'Berhasil!' : 'Gagal.');
+                    alertBox.style.display = 'block';
+                }
+            } catch (err) {
+                form.submit();
+            } finally {
+                btn.disabled = false;
+                btn.textContent = defaultText;
+            }
+        });
+    }
+
+    bindAjaxTest('form-test-telegram', 'btn-test-telegram', '⏳ Mengirim ke Telegram...', 'Test Kirim Telegram');
+    bindAjaxTest('form-test-gemini', 'btn-test-gemini', '⏳ Menghubungi Gemini AI...', 'Test Koneksi Gemini API');
+})();
+</script>
 @endsection
 

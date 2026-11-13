@@ -46,7 +46,10 @@ class TelegramService
         }
 
         try {
-            $resp = Http::timeout(10)->post("https://api.telegram.org/bot{$token}/sendMessage", $payload);
+            $resp = Http::withOptions([
+                'force_ip_resolve' => 'v4',
+                'connect_timeout' => 4,
+            ])->timeout(8)->post("https://api.telegram.org/bot{$token}/sendMessage", $payload);
 
             if (!$resp->successful()) {
                 $desc = $resp->json('description') ?? ('HTTP ' . $resp->status());
@@ -77,7 +80,10 @@ class TelegramService
         }
 
         try {
-            $resp = Http::timeout(8)->get("https://api.telegram.org/bot{$token}/getUpdates", [
+            $resp = Http::withOptions([
+                'force_ip_resolve' => 'v4',
+                'connect_timeout' => 4,
+            ])->timeout(8)->get("https://api.telegram.org/bot{$token}/getUpdates", [
                 'offset' => $offset,
                 'limit' => 25,
                 'allowed_updates' => json_encode(['callback_query']),
@@ -101,7 +107,10 @@ class TelegramService
         }
 
         try {
-            Http::timeout(5)->post("https://api.telegram.org/bot{$token}/answerCallbackQuery", [
+            Http::withOptions([
+                'force_ip_resolve' => 'v4',
+                'connect_timeout' => 3,
+            ])->timeout(5)->post("https://api.telegram.org/bot{$token}/answerCallbackQuery", [
                 'callback_query_id' => $callbackQueryId,
                 'text' => $text,
                 'show_alert' => $showAlert,

@@ -91,9 +91,16 @@ class SettingsController extends Controller
             ->with('status', 'Pengaturan & konfigurasi MongoDB berhasil disimpan.');
     }
 
-    public function testGemini(GeminiService $gemini)
+    public function testGemini(Request $request, GeminiService $gemini)
     {
         $res = $gemini->interact('Reply with exactly: "Gemini Forex AI connected and ready."');
+
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json([
+                'ok' => $res['ok'],
+                'message' => $res['ok'] ? 'Koneksi Gemini berhasil! Respons: ' . $res['text'] : ($res['error'] ?? 'Koneksi gagal.'),
+            ]);
+        }
 
         if ($res['ok']) {
             return redirect()->route('settings.index')
@@ -103,9 +110,16 @@ class SettingsController extends Controller
         return redirect()->route('settings.index')->with('error', $res['error']);
     }
 
-    public function testTelegram(TelegramService $telegram)
+    public function testTelegram(Request $request, TelegramService $telegram)
     {
         $res = $telegram->sendMessage("✅ <b>Forex Day Trader AI</b>\nKoneksi Telegram Bot aktif! Alarm peluang &gt;55% dan SL/TP siap dikirim.");
+
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json([
+                'ok' => $res['ok'],
+                'message' => $res['ok'] ? 'Pesan tes berhasil dikirim ke Telegram!' : ($res['error'] ?? 'Gagal mengirim pesan Telegram.'),
+            ]);
+        }
 
         if ($res['ok']) {
             return redirect()->route('settings.index')->with('status', 'Pesan tes berhasil dikirim ke Telegram!');
