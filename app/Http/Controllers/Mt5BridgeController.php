@@ -77,21 +77,29 @@ class Mt5BridgeController extends Controller
             ->where('expires_at', '<', now())
             ->update(['status' => 'expired']);
 
-        $orders = Mt5Order::where('status', 'approved')
+        $rawOrders = Mt5Order::where('status', 'approved')
             ->orderBy('approved_at', 'asc')
             ->take(5)
-            ->get()
-            ->map(fn ($o) => [
-                'id' => (string) $o->_id,
-                'pair' => $o->pair,
-                'symbol' => $o->mt5_symbol,
-                'side' => $o->side,
-                'lots' => (float) $o->lots,
-                'entry_price' => (float) $o->entry_price,
-                'sl' => (float) $o->stop_loss,
-                'tp' => (float) $o->take_profit,
-            ])
-            ->values();
+            ->get();
+
+        $orders = $rawOrders->map(fn ($o) => [
+            'id' => (string) $o->_id,
+            'pair' => $o->pair,
+            'symbol' => $o->mt5_symbol,
+            'side' => $o->side,
+            'lots' => (float) $o->lots,
+            'entry_price' => (float) $o->entry_price,
+            'sl' => (float) $o->stop_loss,
+            'tp' => (float) $o->take_profit,
+        ])->values();
+
+        // KUNCI PENTING: Segera ubah status menjadi 'dispatched'
+        // agar polling 5 detik berikutnya TIDAK PERNAH mengirim ulang order yang sama!
+        foreach ($rawOrders as $raw) {
+            $raw->status = 'dispatched';
+            $raw->dispatched_at = now();
+            $raw->save();
+        }
 
         return response()->json([
             'ok' => true,

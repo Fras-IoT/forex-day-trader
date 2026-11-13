@@ -18,6 +18,26 @@ input bool   InpAutoExecute      = true;                        // Eksekusi saat
 
 CTrade trade;
 
+// In-memory guard to prevent executing the exact same order ID more than once
+string g_executedOrderIds[];
+
+bool IsOrderAlreadyExecuted(const string id)
+{
+   for(int i = 0; i < ArraySize(g_executedOrderIds); i++)
+   {
+      if(g_executedOrderIds[i] == id)
+         return true;
+   }
+   return false;
+}
+
+void RememberExecutedOrder(const string id)
+{
+   int sz = ArraySize(g_executedOrderIds);
+   ArrayResize(g_executedOrderIds, sz + 1);
+   g_executedOrderIds[sz] = id;
+}
+
 //+------------------------------------------------------------------+
 int OnInit()
 {
@@ -129,8 +149,17 @@ void ProcessOrdersJson(const string &json)
       double sl     = StringToDouble(ExtractJsonNumber(obj, "sl"));
       double tp     = StringToDouble(ExtractJsonNumber(obj, "tp"));
 
+      if(StringLen(id) > 0 && IsOrderAlreadyExecuted(id))
+      {
+         Print("Mencegah duplikasi: Order ID ", id, " sudah pernah diproses di terminal ini.");
+         continue;
+      }
+
       if(StringLen(id) > 0 && StringLen(symbol) > 0 && lots > 0.0)
+      {
+         RememberExecutedOrder(id);
          ExecuteApprovedOrder(id, symbol, side, lots, sl, tp);
+      }
    }
 }
 
@@ -197,7 +226,8 @@ void ReportExecution(const string id, const string status, const string ticket, 
 
    string headers = "Content-Type: application/json\r\nAccept: application/json\r\nX-MT5-Token: " + InpBridgeToken + "\r\n";
    string resHeaders = "";
-   WebRequest("POST", url, headers, 5000, post, result, resHeaders);
+   int code = WebRequest("POST", url, headers, 5000, post, result, resHeaders);
+   Print("ReportExecution [", status, "] Ticket #", ticket, " -> Server HTTP Code: ", code);
 }
 
 //+------------------------------------------------------------------+
