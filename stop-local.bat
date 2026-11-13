@@ -16,3 +16,4 @@ for /f "tokens=5" %%a in ('netstat -aon ^| findstr :8000 ^| findstr LISTENING') 
 
 echo Server dan background monitor telah dihentikan.
 timeout /t 2 >nul
+
