@@ -62,10 +62,17 @@ class ScannerController extends Controller
         return redirect()->route('scanner.index')->with('status', 'Analisis Gemini AI untuk hasil scan diperbarui.');
     }
 
-    public function livePrices(Request $request, ForexMarketService $market)
+    public function livePrices(Request $request, ForexMarketService $market, \App\Services\ForexAutoMonitorService $monitor)
     {
         $pairsParam = $request->query('pairs');
         $pairs = $pairsParam ? array_filter(array_map('trim', explode(',', (string) $pairsParam))) : null;
+
+        // Poll Telegram button clicks every 4s so approvals respond instantly
+        try {
+            $monitor->pollTelegramCallbacks();
+        } catch (\Throwable $e) {
+            // Best effort
+        }
 
         $heartbeat = \Illuminate\Support\Facades\Cache::get('mt5_bridge_heartbeat');
         $isConnected = $heartbeat && (time() - $heartbeat < 25);

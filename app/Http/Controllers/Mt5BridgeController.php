@@ -68,8 +68,10 @@ class Mt5BridgeController extends Controller
             }
         }
 
-        if (Cache::add('tg_poll_lock', true, 3)) {
+        try {
             $monitor->pollTelegramCallbacks();
+        } catch (\Throwable $e) {
+            // Best effort telegram polling
         }
 
         // Expire approved orders whose 15m window has passed

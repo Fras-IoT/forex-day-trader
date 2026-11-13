@@ -93,7 +93,7 @@ class TelegramService
         }
     }
 
-    public function answerCallbackQuery(string $callbackQueryId, string $text): void
+    public function answerCallbackQuery(string $callbackQueryId, string $text, bool $showAlert = true): void
     {
         $token = TraderSetting::current()->resolvedTelegramToken();
         if ($token === '') {
@@ -104,7 +104,7 @@ class TelegramService
             Http::timeout(5)->post("https://api.telegram.org/bot{$token}/answerCallbackQuery", [
                 'callback_query_id' => $callbackQueryId,
                 'text' => $text,
-                'show_alert' => false,
+                'show_alert' => $showAlert,
             ]);
         } catch (\Throwable $e) {
             // Best-effort acknowledgment
