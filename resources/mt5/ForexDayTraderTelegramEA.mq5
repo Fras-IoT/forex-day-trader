@@ -8,7 +8,7 @@
 
 #include <Trade\Trade.mqh>
 
-input string InpServerUrl        = "http://72.62.126.151:8085"; // URL Server Laravel Anda
+input string InpServerUrl        = "http://127.0.0.1:8000";     // URL Server Laravel Anda (default lokal)
 input string InpBridgeToken      = "";                          // MT5 Bridge Token (dari menu Settings)
 input string InpSymbolSuffix     = "";                          // Akhiran symbol broker (misal "" atau "m" atau ".f")
 input int    InpPollSeconds      = 5;                           // Interval cek order disetujui (detik)
@@ -115,11 +115,18 @@ void OnTimer()
       return;
    }
 
+   string json = CharArrayToString(result, 0, WHOLE_ARRAY, CP_UTF8);
+
    // Hanya eksekusi posisi jika fitur eksekusi aktif dan tombol Algo Trading MT5 menyala
    if(!InpAutoExecute || !TerminalInfoInteger(TERMINAL_TRADE_ALLOWED))
+   {
+      if(StringFind(json, "\"orders\":[") >= 0 && StringFind(json, "\"id\":") >= 0)
+      {
+         Print("PERINGATAN: Ada order pending tapi Algo Trading MT5 NONAKTIF! Aktifkan tombol Algo Trading di toolbar MT5.");
+      }
       return;
+   }
 
-   string json = CharArrayToString(result, 0, WHOLE_ARRAY, CP_UTF8);
    ProcessOrdersJson(json);
 }
 
@@ -164,6 +171,18 @@ void ProcessOrdersJson(const string &json)
 }
 
 //+------------------------------------------------------------------+
+void ApplyFillingMode(const string symbol)
+{
+   uint filling = (uint)SymbolInfoInteger(symbol, SYMBOL_FILLING_MODE);
+   if((filling & SYMBOL_FILLING_FOK) != 0)
+      trade.SetTypeFilling(ORDER_FILLING_FOK);
+   else if((filling & SYMBOL_FILLING_IOC) != 0)
+      trade.SetTypeFilling(ORDER_FILLING_IOC);
+   else
+      trade.SetTypeFilling(ORDER_FILLING_RETURN);
+}
+
+//+------------------------------------------------------------------+
 void ExecuteApprovedOrder(const string id, const string symbol, const string side, double lots, double sl, double tp)
 {
    if(!SymbolSelect(symbol, true))
@@ -171,6 +190,8 @@ void ExecuteApprovedOrder(const string id, const string symbol, const string sid
       ReportExecution(id, "failed", "", 0.0, "Symbol tidak ditemukan di Market Watch: " + symbol);
       return;
    }
+
+   ApplyFillingMode(symbol);
 
    int digits = (int)SymbolInfoInteger(symbol, SYMBOL_DIGITS);
    double volMin  = SymbolInfoDouble(symbol, SYMBOL_VOLUME_MIN);

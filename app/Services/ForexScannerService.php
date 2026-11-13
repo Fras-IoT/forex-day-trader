@@ -166,7 +166,6 @@ class ForexScannerService
         $prettySources = array_map(function ($s) {
             return match ($s) {
                 'mt5_finex_live' => 'MT5 Finex Live',
-                'twelvedata_spot' => 'Twelve Data Spot',
                 'yahoo_live' => 'Live Market Feed',
                 'synthetic_offline' => 'Offline Simulation',
                 default => ucwords(str_replace('_', ' ', (string) $s)),

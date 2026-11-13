@@ -15,6 +15,7 @@ class ForexAutoMonitorService
         private readonly ForexScannerService $scanner,
         private readonly ForexTimeMachineService $timeMachine,
         private readonly TelegramService $telegram,
+        private readonly NewsGuardService $newsGuard,
     ) {
     }
 
@@ -174,7 +175,7 @@ class ForexAutoMonitorService
             $meta = $this->market->getPairMeta($pair);
             $decimals = (int) ($hit['decimals'] ?? $meta['decimals']);
 
-            // Fetch Twelve Data Spot price only for pairs with score > 70 (and not in cooldown)
+            // Ambil harga real-time (prioritas MT5 Finex Live) untuk pair dengan score > 70
             $spot = $this->market->getLatestPrice($pair, true);
             $entry = (float) ($spot['price'] ?? $hit['price']);
             $priceSource = $spot['source'] ?? 'yahoo_live';
@@ -213,6 +214,28 @@ class ForexAutoMonitorService
                 $lots = max(0.01, min(10.0, round($maxLossUsd / ($riskPips * $pipValueStd), 2)));
                 $mt5Symbol = str_replace('/', '', $pair);
 
+                $isAuto = $settings->isAutoTrading();
+                $newsRisk = $this->newsGuard->checkNewsRisk($pair, $settings->newsGuardBufferMinutes());
+
+                // Jika News Guard aktif dan ada berita High-Impact:
+                if ($newsRisk['is_blocked']) {
+                    if ($isAuto) {
+                        // Pada Mode Auto Trading: Batalkan eksekusi posisi demi keamanan modal
+                        $msg = "🛡️ <b>[NEWS GUARD] AUTO ENTRY DIBATALKAN</b>\n"
+                            . "Pair: <b>{$pair} (" . strtoupper($side) . ")</b> | Setup: <b>{$hit['setup']}</b>\n"
+                            . "Score: <b>{$hit['score']}/99</b> | Monte Carlo: <b>{$mc['target_first_pct']}%</b>\n"
+                            . "⚠️ <b>Alasan Pembatalan:</b> {$newsRisk['message']}\n"
+                            . "<i>Sistem membatalkan order otomatis ini untuk melindungi akun dari lonjakan spread spike & ekor candle liar.</i>";
+
+                        $sent = $this->telegram->sendMessage($msg);
+                        if ($sent['ok']) {
+                            Cache::put($cooldownKey, true, now()->addMinutes(30));
+                            $summary['alerts_sent']++;
+                        }
+                        continue;
+                    }
+                }
+
                 $mt5Order = Mt5Order::create([
                     'pair' => $pair,
                     'mt5_symbol' => $mt5Symbol,
@@ -225,25 +248,48 @@ class ForexAutoMonitorService
                     'score' => (int) $hit['score'],
                     'expected_r' => (float) $mc['expected_r'],
                     'target_first_pct' => (float) $mc['target_first_pct'],
-                    'status' => 'awaiting_approval',
+                    'status' => $isAuto ? 'approved' : 'awaiting_approval',
+                    'approved_at' => $isAuto ? now() : null,
                     'expires_at' => now()->addMinutes(15),
                 ]);
 
                 $kzTag = !empty($hit['killzone']) ? ' | Killzone ✓' : '';
-                $msg = "🚨 <b>PELUANG ENTRY BER-EDGE — {$pair} (" . strtoupper($side) . ")</b>\n"
-                    . "Setup: <b>{$hit['setup']}</b>\n"
-                    . "Scanner Score: <b>{$hit['score']}/99</b> | Trend: {$hit['trend_bias']}{$kzTag}\n"
-                    . "Monte Carlo: <b>{$mc['target_first_pct']}%</b> (Expected: <b>{$mc['expected_r']}R</b>)\n"
-                    . "Entry: <code>{$entry}</code> | SL: <code>{$stop}</code> | TP: <code>{$target}</code>\n"
-                    . "Ukuran Lot: <b>{$lots} lot</b> (Max Risk \${$maxLossUsd})\n"
-                    . "<i>Sesi: {$scan->session} | Feed: {$priceSource} | Berlaku 15 menit</i>";
 
-                $buttons = [[
-                    ['text' => "✅ SETUJUI ENTRY ({$lots} lot)", 'callback_data' => "mt5_approve:{$mt5Order->_id}"],
-                    ['text' => '❌ TOLAK', 'callback_data' => "mt5_reject:{$mt5Order->_id}"],
-                ]];
+                if ($isAuto) {
+                    $msg = "⚡ <b>[AUTO TRADING] POSISI DIEKSEKUSI OTOMATIS</b>\n"
+                        . "Pair: <b>{$pair} (" . strtoupper($side) . ")</b> | <b>{$lots} lot</b>\n"
+                        . "Setup: <b>{$hit['setup']}</b>\n"
+                        . "Scanner Score: <b>{$hit['score']}/99</b> | Trend: {$hit['trend_bias']}{$kzTag}\n"
+                        . "Monte Carlo: <b>{$mc['target_first_pct']}%</b> (Expected: <b>{$mc['expected_r']}R</b>)\n"
+                        . "Entry: <code>{$entry}</code> | SL: <code>{$stop}</code> | TP: <code>{$target}</code>\n"
+                        . "Ukuran Lot: <b>{$lots} lot</b> (Max Risk \${$maxLossUsd})\n"
+                        . "Status: <b>Langsung Diteruskan ke MT5 Finex (Tanpa Menunggu Persetujuan)</b>\n"
+                        . "<i>Sesi: {$scan->session} | Feed: {$priceSource} | Mode: AUTO TRADING</i>";
 
-                $sent = $this->telegram->sendMessage($msg, $buttons);
+                    $sent = $this->telegram->sendMessage($msg);
+                } else {
+                    $newsWarning = '';
+                    if ($newsRisk['has_news']) {
+                        $newsWarning = "\n⚠️ <b>PERINGATAN NEWS:</b> {$newsRisk['message']}\n<i>Disarankan TIDAK SETUJU atau tunggu berita selesai!</i>\n";
+                    }
+
+                    $msg = "🚨 <b>[MANUAL TRADING] PELUANG ENTRY BER-EDGE — {$pair} (" . strtoupper($side) . ")</b>\n"
+                        . "Setup: <b>{$hit['setup']}</b>\n"
+                        . "Scanner Score: <b>{$hit['score']}/99</b> | Trend: {$hit['trend_bias']}{$kzTag}\n"
+                        . "Monte Carlo: <b>{$mc['target_first_pct']}%</b> (Expected: <b>{$mc['expected_r']}R</b>)\n"
+                        . "Entry: <code>{$entry}</code> | SL: <code>{$stop}</code> | TP: <code>{$target}</code>\n"
+                        . "Ukuran Lot: <b>{$lots} lot</b> (Max Risk \${$maxLossUsd})\n"
+                        . $newsWarning
+                        . "Status: <b>Menunggu Persetujuan Anda di Telegram</b>\n"
+                        . "<i>Sesi: {$scan->session} | Feed: {$priceSource} | Berlaku 15 menit</i>";
+
+                    $buttons = [[
+                        ['text' => "✅ SETUJUI ENTRY ({$lots} lot)", 'callback_data' => "mt5_approve:{$mt5Order->_id}"],
+                        ['text' => '❌ TOLAK', 'callback_data' => "mt5_reject:{$mt5Order->_id}"],
+                    ]];
+
+                    $sent = $this->telegram->sendMessage($msg, $buttons);
+                }
                 if ($sent['ok']) {
                     if (!empty($sent['message_id'])) {
                         $mt5Order->telegram_message_id = $sent['message_id'];
@@ -267,83 +313,110 @@ class ForexAutoMonitorService
             return 0;
         }
 
-        $allowedChatId = TraderSetting::current()->resolvedTelegramChatId();
-        $lastUpdateId = (int) Cache::get('tg_last_update_id', 0);
-        $updates = $this->telegram->getUpdates($lastUpdateId > 0 ? $lastUpdateId + 1 : 0);
-        $processed = 0;
+        // Lock agar tidak ada 2 proses yang memanggil getUpdates bersamaan
+        $lock = Cache::lock('tg_poll_lock', 4);
+        if (!$lock->get()) {
+            return 0;
+        }
 
-        foreach ($updates as $upd) {
-            $updateId = (int) ($upd['update_id'] ?? 0);
-            if ($updateId > $lastUpdateId) {
-                $lastUpdateId = $updateId;
-                Cache::put('tg_last_update_id', $lastUpdateId, now()->addDays(7));
+        try {
+            $settings = TraderSetting::current();
+            $allowedChatId = $settings->resolvedTelegramChatId();
+            $lastUpdateId = (int) ($settings->last_telegram_update_id ?? Cache::get('tg_last_update_id', 0));
+            $updates = $this->telegram->getUpdates($lastUpdateId > 0 ? $lastUpdateId + 1 : 0);
+            $processed = 0;
+
+            if (!empty($updates)) {
+                $maxUpdateId = max(array_map(fn ($u) => (int) ($u['update_id'] ?? 0), $updates));
+                if ($maxUpdateId > $lastUpdateId) {
+                    // Konfirmasi offset ke server Telegram agar update dihapus dari queue Telegram
+                    try {
+                        $this->telegram->getUpdates($maxUpdateId + 1);
+                    } catch (\Throwable $e) {}
+
+                    $settings->last_telegram_update_id = $maxUpdateId;
+                    $settings->save();
+                    Cache::put('tg_last_update_id', $maxUpdateId, now()->addDays(7));
+                }
             }
 
-            $cb = $upd['callback_query'] ?? null;
-            if (!$cb) {
-                continue;
-            }
-
-            $cbId = (string) ($cb['id'] ?? '');
-            $fromChatId = (string) ($cb['message']['chat']['id'] ?? '');
-            $fromUserId = (string) ($cb['from']['id'] ?? '');
-            $data = (string) ($cb['data'] ?? '');
-
-            if ($allowedChatId !== '' && $fromChatId !== $allowedChatId && $fromUserId !== $allowedChatId) {
-                $this->telegram->answerCallbackQuery($cbId, 'Akses ditolak (ID Telegram Anda tidak terdaftar di Settings).', true);
-                continue;
-            }
-
-            if (!str_contains($data, ':')) {
-                continue;
-            }
-
-            [$action, $orderId] = explode(':', $data, 2);
-            $order = Mt5Order::find($orderId);
-            if (!$order) {
-                $this->telegram->answerCallbackQuery($cbId, 'Order tidak ditemukan di server.', true);
-                continue;
-            }
-
-            if ($order->status !== 'awaiting_approval') {
-                $statusLabel = match ($order->status) {
-                    'approved', 'dispatched' => 'Sudah disetujui dan sedang dieksekusi MT5',
-                    'executed' => 'Sudah sukses dieksekusi di MT5',
-                    'expired' => 'Sudah kedaluwarsa',
-                    'rejected' => 'Sudah ditolak sebelumnya',
-                    default => $order->status,
-                };
-                $this->telegram->answerCallbackQuery($cbId, "Perhatian: Order {$statusLabel}.", true);
-                continue;
-            }
-
-            if ($action === 'mt5_approve') {
-                if ($order->expires_at && $order->expires_at->isPast()) {
-                    $order->status = 'expired';
-                    $order->save();
-                    $this->telegram->answerCallbackQuery($cbId, 'Sinyal sudah kedaluwarsa (>15 menit).', true);
-                    $this->telegram->sendMessage("⏰ <b>Kedaluwarsa:</b> Sinyal {$order->pair} (" . strtoupper($order->side) . ") melewati batas 15 menit dan dibatalkan.");
+            foreach ($updates as $upd) {
+                $cb = $upd['callback_query'] ?? null;
+                if (!$cb) {
                     continue;
                 }
 
-                $order->status = 'approved';
-                $order->approved_at = now();
-                $order->save();
-                $processed++;
+                $cbId = (string) ($cb['id'] ?? '');
+                if ($cbId !== '') {
+                    // Hindari pemrosesan ganda pada callback query yang sama
+                    if (Cache::has("tg_cb_done_{$cbId}")) {
+                        continue;
+                    }
+                    Cache::put("tg_cb_done_{$cbId}", true, now()->addHours(24));
+                }
 
-                $this->telegram->answerCallbackQuery($cbId, "✅ Disetujui! Order {$order->pair} diteruskan ke MT5 Finex.", true);
-                $this->telegram->sendMessage("⏳ <b>DISETUJUI DI TELEGRAM:</b>\nPair: <b>{$order->pair} (" . strtoupper($order->side) . ")</b> | {$order->lots} lot\nStatus: <b>Diteruskan ke Robot MT5 (Akan open posisi otomatis)</b>");
-            } elseif ($action === 'mt5_reject') {
-                $order->status = 'rejected';
-                $order->save();
-                $processed++;
+                $fromChatId = (string) ($cb['message']['chat']['id'] ?? '');
+                $fromUserId = (string) ($cb['from']['id'] ?? '');
+                $data = (string) ($cb['data'] ?? '');
 
-                $this->telegram->answerCallbackQuery($cbId, 'Order ditolak & dibatalkan.', true);
-                $this->telegram->sendMessage("❌ <b>DITOLAK:</b> Setup {$order->pair} (" . strtoupper($order->side) . ") dibatalkan.");
+                if ($allowedChatId !== '' && $fromChatId !== $allowedChatId && $fromUserId !== $allowedChatId) {
+                    $this->telegram->answerCallbackQuery($cbId, 'Akses ditolak (ID Telegram Anda tidak terdaftar di Settings).', true);
+                    continue;
+                }
+
+                if (!str_contains($data, ':')) {
+                    continue;
+                }
+
+                [$action, $orderId] = explode(':', $data, 2);
+                $order = Mt5Order::find($orderId);
+                if (!$order) {
+                    $this->telegram->answerCallbackQuery($cbId, 'Order tidak ditemukan di server.', true);
+                    continue;
+                }
+
+                if ($order->status !== 'awaiting_approval') {
+                    $statusLabel = match ($order->status) {
+                        'approved', 'dispatched' => 'Sudah disetujui dan sedang dieksekusi MT5',
+                        'executed' => 'Sudah sukses dieksekusi di MT5',
+                        'expired' => 'Sudah kedaluwarsa',
+                        'rejected' => 'Sudah ditolak sebelumnya',
+                        default => $order->status,
+                    };
+                    $this->telegram->answerCallbackQuery($cbId, "Perhatian: Order {$statusLabel}.", true);
+                    continue;
+                }
+
+                if ($action === 'mt5_approve') {
+                    if ($order->expires_at && $order->expires_at->isPast()) {
+                        $order->status = 'expired';
+                        $order->save();
+                        $this->telegram->answerCallbackQuery($cbId, 'Sinyal sudah kedaluwarsa (>15 menit).', true);
+                        $this->telegram->sendMessage("⏰ <b>Kedaluwarsa:</b> Sinyal {$order->pair} (" . strtoupper($order->side) . ") melewati batas 15 menit dan dibatalkan.");
+                        continue;
+                    }
+
+                    $order->status = 'approved';
+                    $order->approved_at = now();
+                    $order->save();
+                    $processed++;
+
+                    $this->telegram->answerCallbackQuery($cbId, "✅ Disetujui! Order {$order->pair} diteruskan ke MT5 Finex.", true);
+                    $this->telegram->sendMessage("⏳ <b>DISETUJUI DI TELEGRAM:</b>\nPair: <b>{$order->pair} (" . strtoupper($order->side) . ")</b> | {$order->lots} lot\nStatus: <b>Diteruskan ke Robot MT5 (Akan open posisi otomatis)</b>");
+                } elseif ($action === 'mt5_reject') {
+                    $order->status = 'rejected';
+                    $order->save();
+                    $processed++;
+
+                    $this->telegram->answerCallbackQuery($cbId, 'Order ditolak & dibatalkan.', true);
+                    $this->telegram->sendMessage("❌ <b>DITOLAK:</b> Setup {$order->pair} (" . strtoupper($order->side) . ") dibatalkan.");
+                }
             }
-        }
 
-        return $processed;
+            return $processed;
+        } finally {
+            $lock->release();
+        }
     }
 }
 

@@ -38,7 +38,7 @@
     @if($latestScan && !empty($latestScan->hits))
         <div tabindex="0" role="region" aria-labelledby="scan-table-cap" class="table-wrapper">
             <table>
-                <caption id="scan-table-cap">Session: {{ $latestScan->session }} | Source: {{ str_replace(['yahoo_live', 'twelvedata_spot', 'synthetic_offline'], ['Live Market Feed', 'Twelve Data Spot', 'Offline Simulation'], $latestScan->data_source) }} | Scanned: {{ $latestScan->pairs_scanned }} pairs</caption>
+                <caption id="scan-table-cap">Session: {{ $latestScan->session }} | Source: {{ str_replace(['mt5_finex_live', 'yahoo_live', 'synthetic_offline'], ['MT5 Finex Live', 'Live Market Feed', 'Offline Simulation'], $latestScan->data_source) }} | Scanned: {{ $latestScan->pairs_scanned }} pairs</caption>
                 <thead>
                     <tr>
                         <th>Pair</th>

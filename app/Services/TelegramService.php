@@ -22,6 +22,15 @@ class TelegramService
      */
     public function sendMessage(string $message, ?array $inlineKeyboard = null): array
     {
+        // Cegah pengiriman pesan nyata ke Telegram bot saat sedang menjalankan automated tests
+        if (app()->environment('testing')) {
+            return [
+                'ok' => true,
+                'message_id' => 999999,
+                'error' => null,
+            ];
+        }
+
         $settings = TraderSetting::current();
         $token = $settings->resolvedTelegramToken();
         $chatId = $settings->resolvedTelegramChatId();
@@ -74,6 +83,10 @@ class TelegramService
      */
     public function getUpdates(int $offset = 0): array
     {
+        if (app()->environment('testing')) {
+            return [];
+        }
+
         $token = TraderSetting::current()->resolvedTelegramToken();
         if ($token === '') {
             return [];

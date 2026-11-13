@@ -152,6 +152,82 @@ class ForexTraderWorkflowTest extends TestCase
         $this->post("/broker/{$order->_id}/close")->assertRedirect('/broker');
         $order->refresh();
         $this->assertEquals('closed', $order->status);
+
+        // 7. Delete Order
+        $this->delete("/broker/{$order->_id}")->assertRedirect('/broker');
+        $this->assertNull(PaperOrder::find((string) $order->_id));
+
+        // 8. Clear Rejected Orders
+        $rej = PaperOrder::create([
+            'pair' => 'EUR/USD',
+            'side' => 'buy',
+            'lots' => 0.01,
+            'status' => 'rejected',
+        ]);
+        $this->post('/broker/clear-rejected')->assertRedirect('/broker');
+        $this->assertNull(PaperOrder::find((string) $rej->_id));
+
+        // 9. Graceful fallback on GET /broker/{id} (prevents MethodNotAllowedHttpException)
+        $this->get("/broker/{$order->_id}")->assertRedirect('/broker');
+        $this->get("/broker/{$order->_id}/execute")->assertRedirect('/broker');
+        $this->get("/broker/{$order->_id}/close")->assertRedirect('/broker');
+    }
+
+    public function test_trading_mode_toggle_and_auto_trading_behavior(): void
+    {
+        $settings = TraderSetting::current();
+        $this->assertEquals('manual', $settings->trading_mode ?? 'manual');
+        $this->assertTrue($settings->isManualTrading());
+        $this->assertFalse($settings->isAutoTrading());
+
+        // Toggle to auto
+        $resp = $this->post('/settings/toggle-mode');
+        $resp->assertRedirect();
+        $settings->refresh();
+        $this->assertEquals('auto', $settings->trading_mode);
+        $this->assertTrue($settings->isAutoTrading());
+
+        // Toggle back to manual via JSON API
+        $respJson = $this->postJson('/settings/toggle-mode');
+        $respJson->assertOk()->assertJson(['ok' => true, 'mode' => 'manual']);
+        $settings->refresh();
+        $this->assertEquals('manual', $settings->trading_mode);
+        $this->assertTrue($settings->isManualTrading());
+    }
+
+    public function test_economic_calendar_sync_and_news_guard(): void
+    {
+        // 1. Sync Calendar
+        $this->post('/news/sync-calendar')->assertRedirect('/news');
+        $this->assertGreaterThan(50, \App\Models\EconomicEvent::count());
+
+        // 2. News Page renders with calendar data
+        $resp = $this->get('/news');
+        $resp->assertStatus(200);
+        $resp->assertSee('Kalender Berita Ekonomi');
+
+        // 3. News Guard Risk Check
+        $guard = app(\App\Services\NewsGuardService::class);
+        $checkClean = $guard->checkNewsRisk('EUR/USD');
+        $this->assertIsArray($checkClean);
+        $this->assertArrayHasKey('is_blocked', $checkClean);
+
+        // Simulate high impact event 10 minutes ahead
+        $fake = \App\Models\EconomicEvent::create([
+            'event_key' => 'fake_cpi_test',
+            'title' => 'Simulated US CPI Release',
+            'country' => 'USD',
+            'currency' => 'USD',
+            'impact' => 'High',
+            'event_time' => now()->addMinutes(10),
+        ]);
+
+        $checkRisky = $guard->checkNewsRisk('EUR/USD', 30);
+        $this->assertTrue($checkRisky['has_news']);
+        $this->assertTrue($checkRisky['is_blocked']);
+        $this->assertStringContainsString('Simulated US CPI Release', $checkRisky['message']);
+
+        $fake->delete();
     }
 
     public function test_gemini_service_handles_missing_token_gracefully(): void

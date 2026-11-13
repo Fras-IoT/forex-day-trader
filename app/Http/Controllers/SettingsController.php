@@ -40,7 +40,8 @@ class SettingsController extends Controller
             'min_reward_risk' => 'required|numeric|min:0.5|max:10',
             'max_position_pct' => 'required|numeric|min:5|max:100',
             'leverage' => 'required|integer|min:1|max:500',
-            'flat_by_utc' => 'required|string|max:10',
+            'flat_by_wib' => 'nullable|string|max:10',
+            'flat_by_utc' => 'nullable|string|max:10',
             'gemini_model' => 'required|string|max:80',
             'gemini_api_key' => 'nullable|string|max:255',
             'telegram_bot_token' => 'nullable|string|max:255',
@@ -49,10 +50,16 @@ class SettingsController extends Controller
             'mt5_bridge_token' => 'nullable|string|max:255',
             'auto_scan_min_score' => 'nullable|integer|min:10|max:99',
             'auto_scan_min_prob' => 'nullable|numeric|min:10|max:95',
+            'trading_mode' => 'nullable|in:manual,auto',
+            'news_guard_enabled' => 'nullable',
+            'news_guard_buffer_minutes' => 'nullable|integer|min:5|max:180',
             'blocked_pairs' => 'nullable|array',
         ]);
 
         $settings = TraderSetting::current();
+        $settings->trading_mode = $request->input('trading_mode') === 'auto' ? 'auto' : 'manual';
+        $settings->news_guard_enabled = $request->boolean('news_guard_enabled');
+        $settings->news_guard_buffer_minutes = max(5, min(180, (int) ($data['news_guard_buffer_minutes'] ?? 30)));
         $settings->account_balance = (float) $data['account_balance'];
         $settings->max_loss_per_trade_usd = (float) $data['max_loss_per_trade_usd'];
         $settings->max_daily_loss_usd = (float) $data['max_daily_loss_usd'];
@@ -60,7 +67,17 @@ class SettingsController extends Controller
         $settings->min_reward_risk = (float) $data['min_reward_risk'];
         $settings->max_position_pct = (float) $data['max_position_pct'];
         $settings->leverage = (int) $data['leverage'];
-        $settings->flat_by_utc = $data['flat_by_utc'];
+        if (!empty($data['flat_by_wib'])) {
+            $wibVal = trim($data['flat_by_wib']);
+            $settings->flat_by_wib = $wibVal;
+            try {
+                $settings->flat_by_utc = \Carbon\Carbon::createFromFormat('H:i', $wibVal, 'Asia/Jakarta')->setTimezone('UTC')->format('H:i');
+            } catch (\Throwable $e) {
+                $settings->flat_by_utc = '21:55';
+            }
+        } elseif (!empty($data['flat_by_utc'])) {
+            $settings->flat_by_utc = trim($data['flat_by_utc']);
+        }
         $settings->gemini_model = $data['gemini_model'];
         $settings->paper_mode = $request->boolean('paper_mode');
         $settings->auto_scan_enabled = $request->boolean('auto_scan_enabled');
@@ -139,6 +156,26 @@ class SettingsController extends Controller
         }
 
         return redirect()->route('settings.index')->with('status', $msg);
+    }
+
+    public function toggleMode(Request $request)
+    {
+        $settings = TraderSetting::current();
+        $newMode = ($settings->trading_mode ?? 'manual') === 'auto' ? 'manual' : 'auto';
+        $settings->trading_mode = $newMode;
+        $settings->save();
+
+        $label = $newMode === 'auto' ? 'AUTO TRADING (Eksekusi Otomatis)' : 'MANUAL TRADING (Persetujuan Telegram)';
+
+        if ($request->wantsJson()) {
+            return response()->json([
+                'ok' => true,
+                'mode' => $newMode,
+                'label' => $label,
+            ]);
+        }
+
+        return redirect()->back()->with('status', "Mode Trading berhasil diubah menjadi: {$label}");
     }
 
     public function downloadEa()

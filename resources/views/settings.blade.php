@@ -9,6 +9,59 @@
 
         <form method="POST" action="{{ route('settings.update') }}">
             @csrf
+
+            <!-- MODE EKSEKUSI TRADING (MANUAL VS AUTO TRADING) -->
+            <div style="background: var(--surface-2); border: 2px solid {{ $settings->isAutoTrading() ? 'var(--green)' : 'var(--amber)' }}; border-radius: 8px; padding: 1.1rem; margin-bottom: 1.25rem;">
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.85rem;">
+                    <div>
+                        <h3 style="margin: 0; font-size: 1.05rem; display: flex; align-items: center; gap: 0.5rem;">
+                            <span>⚙️ Mode Eksekusi Trading</span>
+                        </h3>
+                        <p class="muted" style="margin: 0.2rem 0 0 0; font-size: 0.82rem;">
+                            Atur bagaimana order dieksekusi saat sinyal entry memenuhi syarat (Min Score &amp; Min Probabilitas).
+                        </p>
+                    </div>
+                    <div>
+                        @if($settings->isAutoTrading())
+                            <span class="badge badge-green" style="font-size: 0.84rem; padding: 0.35rem 0.85rem; font-weight: 700; display: inline-flex; align-items: center; gap: 0.4rem; box-shadow: 0 0 10px rgba(16, 185, 129, 0.25);">
+                                <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#10b981; box-shadow:0 0 6px #10b981;"></span>
+                                ⚡ SIGN STATUS: AUTO TRADING AKTIF
+                            </span>
+                        @else
+                            <span class="badge badge-amber" style="font-size: 0.84rem; padding: 0.35rem 0.85rem; font-weight: 700; display: inline-flex; align-items: center; gap: 0.4rem; box-shadow: 0 0 10px rgba(245, 158, 11, 0.25);">
+                                <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#f59e0b; box-shadow:0 0 6px #f59e0b;"></span>
+                                👤 SIGN STATUS: MANUAL TRADING AKTIF
+                            </span>
+                        @endif
+                    </div>
+                </div>
+
+                <!-- Toggle Options -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+                    <!-- Opsi Manual -->
+                    <label style="display: block; cursor: pointer; border: 2px solid {{ $settings->isManualTrading() ? 'var(--amber)' : 'var(--border)' }}; background: {{ $settings->isManualTrading() ? 'rgba(245, 158, 11, 0.08)' : 'var(--surface)' }}; border-radius: 6px; padding: 0.85rem; transition: all 0.2s ease;">
+                        <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.35rem;">
+                            <input type="radio" name="trading_mode" value="manual" {{ $settings->isManualTrading() ? 'checked' : '' }} onchange="this.form.submit()" style="width: auto; margin: 0;">
+                            <span style="font-weight: 700; color: {{ $settings->isManualTrading() ? 'var(--amber)' : 'var(--text)' }};">👤 MANUAL TRADING</span>
+                        </div>
+                        <p class="muted" style="margin: 0; font-size: 0.79rem; line-height: 1.45;">
+                            Peluang entry dikirim ke <b>Telegram</b> dengan tombol <b>SETUJUI / TOLAK</b>. Posisi <b>hanya</b> masuk MT5 setelah Anda mengklik tombol setuju.
+                        </p>
+                    </label>
+
+                    <!-- Opsi Auto -->
+                    <label style="display: block; cursor: pointer; border: 2px solid {{ $settings->isAutoTrading() ? 'var(--green)' : 'var(--border)' }}; background: {{ $settings->isAutoTrading() ? 'rgba(16, 185, 129, 0.08)' : 'var(--surface)' }}; border-radius: 6px; padding: 0.85rem; transition: all 0.2s ease;">
+                        <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.35rem;">
+                            <input type="radio" name="trading_mode" value="auto" {{ $settings->isAutoTrading() ? 'checked' : '' }} onchange="this.form.submit()" style="width: auto; margin: 0;">
+                            <span style="font-weight: 700; color: {{ $settings->isAutoTrading() ? 'var(--green)' : 'var(--text)' }};">⚡ AUTO TRADING</span>
+                        </div>
+                        <p class="muted" style="margin: 0; font-size: 0.79rem; line-height: 1.45;">
+                            Peluang entry yang lolos syarat settingan <b>langsung otomatis dieksekusi ke MT5 Finex</b> tanpa butuh konfirmasi tombol di Telegram.
+                        </p>
+                    </label>
+                </div>
+            </div>
+
             <div class="form-row">
                 <div>
                     <label for="gemini_api_key">Gemini API Token (Access Key)</label>
@@ -63,8 +116,8 @@
                     <input id="max_position_pct" name="max_position_pct" type="number" step="1" value="{{ $settings->max_position_pct }}" required>
                 </div>
                 <div>
-                    <label for="flat_by_utc">Flat-by Session Cutoff (UTC)</label>
-                    <input id="flat_by_utc" name="flat_by_utc" type="text" value="{{ $settings->flat_by_utc }}" required>
+                    <label for="flat_by_wib">Batas Jam Flat-by Harian (WIB)</label>
+                    <input id="flat_by_wib" name="flat_by_wib" type="time" value="{{ $settings->resolvedFlatByWib() }}" required style="font-size:0.95rem; padding:0.45rem 0.65rem;">
                 </div>
             </div>
 
@@ -73,13 +126,6 @@
                     <input type="checkbox" name="paper_mode" value="1" {{ $settings->paper_mode ? 'checked' : '' }} style="width:auto;">
                     Paper Trading Mode (Default &amp; Aman)
                 </label>
-            </div>
-
-            <hr style="border:0; border-top:1px solid var(--border); margin:1rem 0;">
-            <h3 style="margin-top:0;">Sumber Harga Spot (Twelve Data — Mendekati MT5 Finex)</h3>
-            <div style="margin-bottom:0.85rem;">
-                <label for="twelve_data_api_key">Twelve Data API Key (Gratis di twelvedata.com)</label>
-                <input id="twelve_data_api_key" name="twelve_data_api_key" type="password" placeholder="{{ $settings->resolvedTwelveDataKey() !== '' ? 'API Key tersimpan (Spot Aktif)' : 'Masukkan API key Twelve Data (kosong = pakai Live Market Feed)' }}">
             </div>
 
             <hr style="border:0; border-top:1px solid var(--border); margin:1rem 0;">
@@ -113,6 +159,25 @@
                     <input type="checkbox" name="auto_close_on_hit" value="1" {{ ($settings->auto_close_on_hit ?? true) ? 'checked' : '' }} style="width:auto;">
                     Otomatis Close PaperOrder saat hit SL / TP + Kirim Notifikasi Telegram
                 </label>
+            </div>
+
+            <hr style="border:0; border-top:1px solid var(--border); margin:1rem 0;">
+            <h3 style="margin-top:0; display:flex; align-items:center; gap:0.4rem;">
+                <span>🛡️ News Guard (Proteksi Volatilitas Berita High-Impact)</span>
+            </h3>
+            <p class="muted" style="margin-top:-0.3rem; margin-bottom:0.75rem;">
+                Mencegah eksekusi order saat ada rilis berita berdampak besar (seperti NFP, CPI, Keputusan Suku Bunga) untuk melindungi modal dari pelebaran spread liar (*spread spike*) dan ekor candle palsu.
+            </p>
+            <div style="margin-bottom:0.85rem;">
+                <label style="display:flex; align-items:center; gap:0.5rem; font-weight:600;">
+                    <input type="checkbox" name="news_guard_enabled" value="1" {{ ($settings->news_guard_enabled ?? true) ? 'checked' : '' }} style="width:auto;">
+                    Aktifkan News Guard Risk Filter (Blokir Auto Trading &amp; Beri Peringatan Manual)
+                </label>
+            </div>
+            <div style="margin-bottom:0.85rem;">
+                <label for="news_guard_buffer_minutes">Jendela Waktu Pengaman (Buffer Menit)</label>
+                <input id="news_guard_buffer_minutes" name="news_guard_buffer_minutes" type="number" min="5" max="180" value="{{ $settings->news_guard_buffer_minutes ?? 30 }}">
+                <span class="muted" style="font-size:0.78rem;">Sistem akan memblokir/memperingatkan entry dari <b>{{ $settings->news_guard_buffer_minutes ?? 30 }} menit sebelum</b> hingga <b>{{ $settings->news_guard_buffer_minutes ?? 30 }} menit sesudah</b> rilis berita High Impact.</span>
             </div>
 
             <hr style="border:0; border-top:1px solid var(--border); margin:1rem 0;">
@@ -152,30 +217,35 @@
                 @endphp
                 @if($mt5Conn)
                     <span class="badge badge-green">MT5 Finex Live</span>
-                @elseif($settings->resolvedTwelveDataKey() !== '')
-                    <span class="badge badge-green">Twelve Data Spot</span>
                 @else
                     <span class="badge badge-brand">Live Market Feed</span>
+                @endif
+            </li>
+            <li><strong>Sign Status Trading:</strong>
+                @if($settings->isAutoTrading())
+                    <span class="badge badge-green">⚡ AUTO TRADING (Eksekusi Otomatis)</span>
+                @else
+                    <span class="badge badge-amber">👤 MANUAL TRADING (Persetujuan Telegram)</span>
                 @endif
             </li>
         </ul>
 
         <div id="settings-ajax-alert" style="display:none; margin-top:1rem;" class="alert-banner"></div>
 
-        <div style="display:flex; gap:0.5rem; flex-wrap:wrap; margin-top:1rem;">
-            <form id="form-test-gemini" method="POST" action="{{ route('settings.test-gemini') }}">
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.6rem; margin-top:1.25rem;">
+            <form id="form-test-gemini" method="POST" action="{{ route('settings.test-gemini') }}" style="margin:0;">
                 @csrf
-                <button id="btn-test-gemini" class="btn" type="submit">Test Koneksi Gemini API</button>
+                <button id="btn-test-gemini" class="btn" type="submit" style="width:100%; height:100%; justify-content:center; text-align:center;">Test Koneksi Gemini API</button>
             </form>
-            <form id="form-test-telegram" method="POST" action="{{ route('settings.test-telegram') }}">
+            <form id="form-test-telegram" method="POST" action="{{ route('settings.test-telegram') }}" style="margin:0;">
                 @csrf
-                <button id="btn-test-telegram" class="btn" type="submit">Test Kirim Telegram</button>
+                <button id="btn-test-telegram" class="btn" type="submit" style="width:100%; height:100%; justify-content:center; text-align:center;">Test Kirim Telegram</button>
             </form>
-            <form method="POST" action="{{ route('settings.run-monitor') }}">
+            <form method="POST" action="{{ route('settings.run-monitor') }}" style="margin:0;">
                 @csrf
-                <button class="btn btn-primary" type="submit">Jalankan Auto-Monitor Sekarang</button>
+                <button class="btn btn-primary" type="submit" style="width:100%; height:100%; justify-content:center; text-align:center;">Jalankan Auto-Monitor</button>
             </form>
-            <a class="btn" href="{{ route('settings.download-ea') }}">Download EA MT5 (.mq5)</a>
+            <a class="btn" href="{{ route('settings.download-ea') }}" style="width:100%; height:100%; box-sizing:border-box; justify-content:center; text-align:center; display:inline-flex; align-items:center;">Download EA MT5 (.mq5)</a>
         </div>
     </div>
 </div>

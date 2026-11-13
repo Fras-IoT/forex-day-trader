@@ -446,6 +446,8 @@
             $mt5Hb = \Illuminate\Support\Facades\Cache::get('mt5_bridge_heartbeat');
             $mt5Conn = $mt5Hb && (time() - $mt5Hb < 25);
             $mt5Trade = (bool) \Illuminate\Support\Facades\Cache::get('mt5_trade_allowed', true);
+            $settingsGlobal = \App\Models\TraderSetting::current();
+            $isAutoMode = $settingsGlobal->isAutoTrading();
         @endphp
         <span id="mt5-global-status-pill"
               class="badge {{ $mt5Conn ? ($mt5Trade ? 'badge-green' : 'badge-amber') : 'badge-red' }}"
@@ -454,6 +456,15 @@
             <span id="mt5-status-dot" style="display:inline-block; width:8px; height:8px; border-radius:50%; background:{{ $mt5Conn ? ($mt5Trade ? '#10b981' : '#f59e0b') : '#ef4444' }}; box-shadow:0 0 6px {{ $mt5Conn ? ($mt5Trade ? '#10b981' : '#f59e0b') : '#ef4444' }};"></span>
             <span id="mt5-status-label">{{ $mt5Conn ? ($mt5Trade ? 'MT5 Connected (Finex Live)' : 'MT5 Standby (Algo Mati)') : 'MT5 Disconnected' }}</span>
         </span>
+
+        <a href="{{ route('settings.index') }}"
+           id="trading-mode-pill"
+           class="badge {{ $isAutoMode ? 'badge-green' : 'badge-amber' }}"
+           style="display:inline-flex; align-items:center; gap:0.4rem; padding:0.22rem 0.6rem; font-size:0.76rem; border-radius:999px; text-decoration:none; font-weight:700; transition:all 0.3s ease; user-select:none;"
+           title="Mode saat ini: {{ $isAutoMode ? 'AUTO TRADING (Eksekusi Otomatis Aktif)' : 'MANUAL TRADING (Butuh Persetujuan Telegram)' }}. Klik untuk ubah di menu Settings.">
+            <span>{{ $isAutoMode ? '⚡' : '👤' }}</span>
+            <span id="trading-mode-label">MODE: {{ $isAutoMode ? 'AUTO TRADING' : 'MANUAL' }}</span>
+        </a>
     </div>
     <nav class="nav" aria-label="Main navigation">
         <a href="{{ route('dashboard') }}" class="{{ request()->routeIs('dashboard') ? 'active' : '' }}">Dashboard</a>

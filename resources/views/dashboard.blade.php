@@ -9,6 +9,24 @@
     </div>
 @endif
 
+<div style="background: var(--surface); border: 1px solid var(--border); border-left: 4px solid {{ $settings->isAutoTrading() ? '#10b981' : '#f59e0b' }}; border-radius: 6px; padding: 0.65rem 1rem; margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+    <div style="display: flex; align-items: center; gap: 0.6rem;">
+        <span style="font-size: 1.1rem;">{{ $settings->isAutoTrading() ? '⚡' : '👤' }}</span>
+        <div>
+            <strong style="font-size: 0.9rem;">Sign Status Mode Trading:</strong>
+            <span class="badge {{ $settings->isAutoTrading() ? 'badge-green' : 'badge-amber' }}" style="font-weight: 700; margin-left: 0.3rem;">
+                {{ $settings->isAutoTrading() ? 'AUTO TRADING (Eksekusi Otomatis)' : 'MANUAL TRADING (Persetujuan Telegram)' }}
+            </span>
+        </div>
+    </div>
+    <div style="display: flex; align-items: center; gap: 0.5rem;">
+        <span class="muted" style="font-size: 0.8rem;">
+            {{ $settings->isAutoTrading() ? 'Sinyal ber-edge langsung otomatis diteruskan ke Robot MT5 Finex.' : 'Sinyal membutuhkan persetujuan tombol di Telegram sebelum dieksekusi.' }}
+        </span>
+        <a href="{{ route('settings.index') }}" class="btn btn-sm" style="font-size: 0.76rem;">Ubah di Settings &rarr;</a>
+    </div>
+</div>
+
 <div class="grid grid-4" style="margin-bottom: 1rem;">
     <div class="card">
         <div class="muted">Paper Equity</div>
@@ -32,7 +50,7 @@
     <div class="card">
         <div class="muted">Active Price Alerts</div>
         <div style="font-size: 1.5rem; font-weight: 700;" class="mono">{{ $activeAlerts->count() }}</div>
-        <div class="muted">Flat-by cutoff: {{ $settings->flat_by_utc }} UTC</div>
+        <div class="muted">Flat-by cutoff: {{ $settings->resolvedFlatByWib() }} WIB</div>
     </div>
 </div>
 
@@ -66,7 +84,7 @@
         @if($latestScan && !empty($latestScan->hits))
             <div tabindex="0" role="region" aria-labelledby="dash-scan-cap" class="table-wrapper">
                 <table>
-                    <caption id="dash-scan-cap">{{ $latestScan->session }} ({{ str_replace(['yahoo_live', 'twelvedata_spot', 'synthetic_offline'], ['Live Market Feed', 'Twelve Data Spot', 'Offline Simulation'], $latestScan->data_source) }})</caption>
+                    <caption id="dash-scan-cap">{{ $latestScan->session }} ({{ str_replace(['mt5_finex_live', 'yahoo_live', 'synthetic_offline'], ['MT5 Finex Live', 'Live Market Feed', 'Offline Simulation'], $latestScan->data_source) }})</caption>
                     <thead>
                         <tr><th>Pair</th><th>Side</th><th>Setup</th><th>Price</th><th>Action</th></tr>
                     </thead>

@@ -33,5 +33,10 @@ class PaperOrder extends Model
         'executed_at',
         'closed_at',
     ];
+
+    protected $casts = [
+        'executed_at' => 'datetime',
+        'closed_at' => 'datetime',
+    ];
 }
 

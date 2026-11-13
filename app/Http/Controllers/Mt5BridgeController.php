@@ -26,7 +26,7 @@ class Mt5BridgeController extends Controller
     /**
      * Polled every ~5s by MT5 Expert Advisor. Also receives live quotes and checks Telegram Approve/Reject clicks.
      */
-    public function pending(Request $request, ForexAutoMonitorService $monitor)
+    public function pending(Request $request)
     {
         if ($err = $this->authorizeBridge($request)) {
             return $err;
@@ -68,21 +68,42 @@ class Mt5BridgeController extends Controller
             }
         }
 
-        try {
-            $monitor->pollTelegramCallbacks();
-        } catch (\Throwable $e) {
-            // Best effort telegram polling
-        }
-
-        // Expire approved orders whose 15m window has passed
+        // Expire approved orders whose 15m window has passed (including legacy orders with null expires_at)
         Mt5Order::where('status', 'approved')
-            ->where('expires_at', '<', now())
+            ->where(function ($q) {
+                $q->where('expires_at', '<', now())
+                  ->orWhere(function ($q2) {
+                      $q2->whereNull('expires_at')
+                         ->where('created_at', '<', now()->subMinutes(15));
+                  });
+            })
             ->update(['status' => 'expired']);
 
         $rawOrders = Mt5Order::where('status', 'approved')
             ->orderBy('approved_at', 'asc')
             ->take(5)
             ->get();
+
+        $tradeAllowed = (bool) Cache::get('mt5_trade_allowed', true);
+
+        // Jika tombol Algo Trading di MT5 mati, jangan dispatch order dulu dan ingatkan user
+        if (!$tradeAllowed && $rawOrders->isNotEmpty()) {
+            if (!Cache::has('mt5_algo_disabled_warned')) {
+                Cache::put('mt5_algo_disabled_warned', true, 60);
+                try {
+                    $tg = app(TelegramService::class);
+                    if ($tg->isConfigured()) {
+                        $tg->sendMessage("⚠️ <b>PERINGATAN MT5:</b> Ada order disetujui, tapi tombol <b>Algo Trading</b> di terminal MT5 Anda sedang <b>MATI / NONAKTIF</b>. Tolong aktifkan tombol Algo Trading di MT5 agar order dapat dieksekusi!");
+                    }
+                } catch (\Throwable $e) {}
+            }
+
+            return response()->json([
+                'ok' => true,
+                'orders' => [],
+                'warning' => 'MT5 trade_allowed is false; orders held pending Algo Trading activation.',
+            ]);
+        }
 
         $orders = $rawOrders->map(fn ($o) => [
             'id' => (string) $o->_id,

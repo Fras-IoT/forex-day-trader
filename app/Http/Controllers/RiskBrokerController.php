@@ -186,5 +186,27 @@ class RiskBrokerController extends Controller
         return redirect()->route('broker.index')
             ->with('status', "Posisi {$order->pair} ditutup @ {$closePrice} (PnL: {$pips} pips / \${$pnlUsd}).");
     }
+
+    public function destroyOrder(string $id)
+    {
+        $order = PaperOrder::find($id);
+        if ($order) {
+            $order->delete();
+            return redirect()->route('broker.index')->with('status', 'Ticket order berhasil dihapus.');
+        }
+
+        return redirect()->route('broker.index')->with('status', 'Ticket order sudah tidak ada atau telah dihapus.');
+    }
+
+    public function clearRejected()
+    {
+        $rejected = PaperOrder::where('status', 'rejected')->get();
+        $count = $rejected->count();
+        foreach ($rejected as $order) {
+            $order->delete();
+        }
+
+        return redirect()->route('broker.index')->with('status', "{$count} ticket ditolak berhasil dibersihkan.");
+    }
 }
 

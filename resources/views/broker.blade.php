@@ -46,9 +46,16 @@
                             <strong>{{ strtoupper($ord->side) }} {{ $ord->lots }} lot {{ $ord->pair }}</strong>
                             <span class="mono">@ {{ $ord->entry_price }}</span>
                         </div>
-                        <button type="button" class="btn btn-primary btn-sm" onclick="document.getElementById('confirm-dialog-{{ (string)$ord->_id }}').showModal()">
-                            Approve &amp; Eksekusi ke MT5
-                        </button>
+                        <div style="display:flex; gap:0.4rem; align-items:center;">
+                            <button type="button" class="btn btn-primary btn-sm" onclick="document.getElementById('confirm-dialog-{{ (string)$ord->_id }}').showModal()">
+                                Approve &amp; Eksekusi ke MT5
+                            </button>
+                            <form method="POST" action="{{ route('broker.destroy', (string)$ord->_id) }}" onsubmit="return confirm('Apakah Anda yakin ingin menghapus ticket pending ini?')" style="margin:0;">
+                                @csrf
+                                @method('DELETE')
+                                <button type="submit" class="btn btn-sm btn-danger" title="Hapus Ticket Pending">Hapus</button>
+                            </form>
+                        </div>
                     </div>
                     <div class="muted mono" style="margin-top:0.35rem;">
                         SL: {{ $ord->stop_loss }} | TP: {{ $ord->take_profit }} | Max Loss: ${{ $ord->max_loss_usd }} | R:R {{ $ord->reward_risk }}x
@@ -86,7 +93,13 @@
 
         @if(isset($rejectedOrders) && $rejectedOrders->count() > 0)
             <div style="margin-top:1.25rem; border-top:1px dashed var(--border); padding-top:1rem;">
-                <h4 style="color:var(--red); margin-bottom:0.5rem;">Ticket Ditolak Sistem (Risk Check BLOCK)</h4>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem;">
+                    <h4 style="color:var(--red); margin:0;">Ticket Ditolak Sistem (Risk Check BLOCK)</h4>
+                    <form method="POST" action="{{ route('broker.clear-rejected') }}" onsubmit="return confirm('Hapus semua riwayat ticket yang ditolak sistem?')" style="margin:0;">
+                        @csrf
+                        <button type="submit" class="btn btn-sm" style="font-size:0.75rem; color:var(--red); border-color:var(--red);">Bersihkan Semua ({{ $rejectedOrders->count() }})</button>
+                    </form>
+                </div>
                 @foreach($rejectedOrders as $rej)
                     <div style="border:1px solid #e53e3e33; background:rgba(229, 62, 62, 0.05); border-radius:8px; padding:0.75rem; margin-bottom:0.6rem;">
                         <div style="display:flex; justify-content:space-between; align-items:center;">
@@ -95,7 +108,14 @@
                                 <strong>{{ strtoupper($rej->side) }} {{ $rej->pair }}</strong>
                                 <span class="mono" style="font-size:0.85rem;">(SL: {{ $rej->stop_loss }} / TP: {{ $rej->take_profit }})</span>
                             </div>
-                            <span class="muted" style="font-size:0.75rem;">{{ $rej->created_at ? $rej->created_at->diffForHumans() : '' }}</span>
+                            <div style="display:flex; align-items:center; gap:0.5rem;">
+                                <span class="muted" style="font-size:0.75rem;">{{ $rej->created_at ? $rej->created_at->diffForHumans() : '' }}</span>
+                                <form method="POST" action="{{ route('broker.destroy', (string)$rej->_id) }}" style="margin:0;">
+                                    @csrf
+                                    @method('DELETE')
+                                    <button type="submit" class="btn btn-sm" style="padding:0.15rem 0.45rem; font-size:0.72rem; color:var(--red);" title="Hapus ticket ditolak ini">✕ Hapus</button>
+                                </form>
+                            </div>
                         </div>
                         @if(!empty($rej->risk_checks))
                             <ul style="margin:0.5rem 0 0 1.2rem; font-size:0.82rem;">
@@ -153,17 +173,31 @@
         <div tabindex="0" role="region" aria-labelledby="closed-pos-cap" class="table-wrapper">
             <table>
                 <caption id="closed-pos-cap">Closed Paper Trades</caption>
-                <thead><tr><th>Pair</th><th>Side</th><th>Lots</th><th>Entry</th><th>Close</th><th>Pips</th><th>PnL (USD)</th></tr></thead>
+                <thead>
+                    <tr>
+                        <th>Tanggal &amp; Jam (WIB)</th>
+                        <th>Pair</th>
+                        <th>Side</th>
+                        <th>Lots</th>
+                        <th>Entry</th>
+                        <th>Close</th>
+                        <th>Pips</th>
+                        <th>PnL (USD)</th>
+                    </tr>
+                </thead>
                 <tbody>
                     @foreach($closedOrders as $c)
                     <tr>
+                        <td data-label="Waktu" class="mono" style="font-size:0.83rem; white-space:nowrap;">
+                            {{ $c->closed_at ? $c->closed_at->setTimezone('Asia/Jakarta')->format('d M Y H:i') . ' WIB' : ($c->updated_at ? $c->updated_at->setTimezone('Asia/Jakarta')->format('d M Y H:i') . ' WIB' : '-') }}
+                        </td>
                         <th>{{ $c->pair }}</th>
                         <td data-label="Side">{{ strtoupper($c->side) }}</td>
                         <td data-label="Lots" class="mono">{{ $c->lots }}</td>
                         <td data-label="Entry" class="mono">{{ $c->entry_price }}</td>
                         <td data-label="Close" class="mono">{{ $c->close_price }}</td>
                         <td data-label="Pips" class="mono">{{ $c->pnl_pips }}</td>
-                        <td data-label="PnL" class="mono" style="color: {{ $c->pnl_usd >= 0 ? 'var(--green)' : 'var(--red)' }};">
+                        <td data-label="PnL" class="mono" style="color: {{ $c->pnl_usd >= 0 ? 'var(--green)' : 'var(--red)' }}; font-weight:600;">
                             {{ $c->pnl_usd >= 0 ? '+' : '' }}${{ number_format($c->pnl_usd, 2) }}
                         </td>
                     </tr>

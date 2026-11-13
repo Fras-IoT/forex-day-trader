@@ -42,13 +42,19 @@ Route::middleware('auth')->group(function () {
     Route::prefix('broker')->name('broker.')->group(function () {
         Route::get('/', [RiskBrokerController::class, 'index'])->name('index');
         Route::post('/size', [RiskBrokerController::class, 'sizeAndCheck'])->name('size');
+        Route::post('/clear-rejected', [RiskBrokerController::class, 'clearRejected'])->name('clear-rejected');
+        Route::get('/{id}/execute', fn () => redirect()->route('broker.index'));
         Route::post('/{id}/execute', [RiskBrokerController::class, 'execute'])->name('execute');
+        Route::get('/{id}/close', fn () => redirect()->route('broker.index'));
         Route::post('/{id}/close', [RiskBrokerController::class, 'close'])->name('close');
+        Route::get('/{id}', fn () => redirect()->route('broker.index'));
+        Route::match(['delete', 'post'], '/{id}', [RiskBrokerController::class, 'destroyOrder'])->name('destroy');
     });
 
     Route::prefix('news')->name('news.')->group(function () {
         Route::get('/', [NewsAlertController::class, 'news'])->name('index');
         Route::post('/fetch', [NewsAlertController::class, 'fetchNews'])->name('fetch');
+        Route::post('/sync-calendar', [NewsAlertController::class, 'syncCalendar'])->name('sync-calendar');
     });
 
     Route::prefix('alerts')->name('alerts.')->group(function () {
@@ -69,6 +75,7 @@ Route::middleware('auth')->group(function () {
         Route::prefix('settings')->name('settings.')->group(function () {
             Route::get('/', [SettingsController::class, 'index'])->name('index');
             Route::post('/', [SettingsController::class, 'update'])->name('update');
+            Route::post('/toggle-mode', [SettingsController::class, 'toggleMode'])->name('toggle-mode');
             Route::post('/test-gemini', [SettingsController::class, 'testGemini'])->name('test-gemini');
             Route::post('/test-telegram', [SettingsController::class, 'testTelegram'])->name('test-telegram');
             Route::post('/run-monitor', [SettingsController::class, 'runMonitor'])->name('run-monitor');
