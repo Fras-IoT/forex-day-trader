@@ -13,6 +13,9 @@ if %errorlevel% neq 0 (
 )
 
 echo [1/3] Menyiapkan environment lokal...
+for /f "tokens=5" %%a in ('netstat -aon ^| findstr :8000 ^| findstr LISTENING') do (
+    taskkill /f /pid %%a >nul 2>nul
+)
 call php artisan config:clear >nul 2>nul
 
 echo [2/3] Menjalankan Web Server & Auto-Monitor...
