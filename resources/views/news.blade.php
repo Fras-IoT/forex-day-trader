@@ -129,13 +129,10 @@
             </a>
         </div>
 
-        <div style="display:flex; align-items:center; gap:0.6rem; flex-wrap:nowrap;">
-            <h3 style="margin:0; font-size:1.2rem; color:var(--text); display:flex; align-items:center; gap:0.45rem; white-space:nowrap;">
-                <span>📅</span>
-                <span style="white-space:nowrap; font-weight:700;">{{ $currentMonthName }}</span>
-            </h3>
-            <!-- Selector Cepat Bulan (1 Tahun ke Depan) -->
-            <select onchange="window.location.href=this.value" style="padding:0.35rem 0.6rem; font-size:0.85rem; border-radius:6px; border:1px solid var(--border); background:var(--surface); color:var(--text); font-weight:600; white-space:nowrap;" title="Pilih Bulan dalam 1 Tahun">
+        <div style="display:flex; align-items:center; gap:0.5rem; flex-wrap:nowrap;">
+            <span style="font-size:1.35rem; line-height:1;">📅</span>
+            <!-- Dropdown Bulan sekaligus Penamaan Judul Kalender -->
+            <select onchange="window.location.href=this.value" style="padding:0.4rem 0.85rem; font-size:1.15rem; font-weight:800; border-radius:8px; border:1.5px solid var(--border); background:var(--surface); color:var(--text); cursor:pointer; box-shadow:0 1px 2px rgba(0,0,0,0.05); outline:none; white-space:nowrap;" title="Pilih Bulan &amp; Tahun Kalender">
                 @foreach($availableMonths as $am)
                     <option value="{{ route('news.index', array_merge(request()->query(), ['view' => 'calendar', 'year' => $am['year'], 'month' => $am['month']])) }}" {{ $am['is_current'] ? 'selected' : '' }}>
                         {{ $am['label'] }}
