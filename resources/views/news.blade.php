@@ -117,24 +117,25 @@
 <div class="card" style="margin-bottom: 1.5rem; padding: 1.25rem;">
     <!-- HEADER NAVIGASI BULAN -->
     <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.75rem; margin-bottom:1rem; padding:0.6rem 0.8rem; background:var(--surface-2); border:1px solid var(--border); border-radius:8px;">
-        <div style="display:flex; align-items:center; gap:0.4rem;">
-            <a href="{{ route('news.index', array_merge(request()->query(), ['view' => 'calendar', 'year' => $prevYear, 'month' => $prevMonth])) }}" class="btn btn-sm" title="Geser ke Bulan Sebelumnya">
+        <div style="display:flex; align-items:center; gap:0.4rem; flex-wrap:nowrap;">
+            <a href="{{ route('news.index', array_merge(request()->query(), ['view' => 'calendar', 'year' => $prevYear, 'month' => $prevMonth])) }}" class="btn btn-sm" title="Geser ke Bulan Sebelumnya" style="white-space:nowrap;">
                 &larr; Bulan Lalu
             </a>
-            <a href="{{ route('news.index', array_merge(request()->query(), ['view' => 'calendar', 'year' => now('Asia/Jakarta')->year, 'month' => now('Asia/Jakarta')->month])) }}" class="btn btn-sm" title="Lompat ke Bulan Saat Ini">
+            <a href="{{ route('news.index', array_merge(request()->query(), ['view' => 'calendar', 'year' => now('Asia/Jakarta')->year, 'month' => now('Asia/Jakarta')->month])) }}" class="btn btn-sm" title="Lompat ke Bulan Saat Ini" style="white-space:nowrap;">
                 Hari Ini
             </a>
-            <a href="{{ route('news.index', array_merge(request()->query(), ['view' => 'calendar', 'year' => $nextYear, 'month' => $nextMonth])) }}" class="btn btn-sm" title="Geser ke Bulan Berikutnya">
+            <a href="{{ route('news.index', array_merge(request()->query(), ['view' => 'calendar', 'year' => $nextYear, 'month' => $nextMonth])) }}" class="btn btn-sm" title="Geser ke Bulan Berikutnya" style="white-space:nowrap;">
                 Bulan Berikutnya &rarr;
             </a>
         </div>
 
-        <div style="display:flex; align-items:center; gap:0.6rem;">
-            <h3 style="margin:0; font-size:1.2rem; color:var(--text); display:flex; align-items:center; gap:0.4rem;">
-                <span>📅</span> <strong>{{ $currentMonthName }}</strong>
+        <div style="display:flex; align-items:center; gap:0.6rem; flex-wrap:nowrap;">
+            <h3 style="margin:0; font-size:1.2rem; color:var(--text); display:flex; align-items:center; gap:0.45rem; white-space:nowrap;">
+                <span>📅</span>
+                <span style="white-space:nowrap; font-weight:700;">{{ $currentMonthName }}</span>
             </h3>
             <!-- Selector Cepat Bulan (1 Tahun ke Depan) -->
-            <select onchange="window.location.href=this.value" style="padding:0.35rem 0.6rem; font-size:0.85rem; border-radius:6px; border:1px solid var(--border); background:var(--surface); color:var(--text); font-weight:600;" title="Pilih Bulan dalam 1 Tahun">
+            <select onchange="window.location.href=this.value" style="padding:0.35rem 0.6rem; font-size:0.85rem; border-radius:6px; border:1px solid var(--border); background:var(--surface); color:var(--text); font-weight:600; white-space:nowrap;" title="Pilih Bulan dalam 1 Tahun">
                 @foreach($availableMonths as $am)
                     <option value="{{ route('news.index', array_merge(request()->query(), ['view' => 'calendar', 'year' => $am['year'], 'month' => $am['month']])) }}" {{ $am['is_current'] ? 'selected' : '' }}>
                         {{ $am['label'] }}
@@ -143,7 +144,7 @@
             </select>
         </div>
 
-        <div style="font-size:0.84rem;">
+        <div style="font-size:0.84rem; white-space:nowrap;">
             <span class="badge badge-brand">{{ $monthEventsCount }} Event di Bulan Ini</span>
         </div>
     </div>
