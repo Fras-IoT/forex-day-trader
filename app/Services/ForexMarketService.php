@@ -173,39 +173,35 @@ class ForexMarketService
             }
             $cacheKey = "fx_live_quote_{$meta['yahoo']}";
 
-            $quotes[$meta['pair']] = Cache::remember($cacheKey, 5, function () use ($meta) {
-                foreach (['https://query2.finance.yahoo.com', 'https://query1.finance.yahoo.com'] as $host) {
-                    try {
-                        $resp = Http::timeout(3)
-                            ->withHeaders(['User-Agent' => 'Mozilla/5.0 (compatible; ForexDayTraderAI/1.0)'])
-                            ->get("{$host}/v8/finance/chart/{$meta['yahoo']}", [
-                                'range' => '1d',
-                                'interval' => '1m',
-                            ]);
+            $quotes[$meta['pair']] = Cache::remember($cacheKey, 15, function () use ($meta) {
+                try {
+                    $resp = Http::timeout(2)
+                        ->withHeaders(['User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'])
+                        ->get("https://query2.finance.yahoo.com/v8/finance/chart/{$meta['yahoo']}", [
+                            'range' => '1d',
+                            'interval' => '1m',
+                        ]);
 
-                        if ($resp->ok()) {
-                            $result = $resp->json()['chart']['result'][0] ?? null;
-                            $mktPrice = $result['meta']['regularMarketPrice'] ?? null;
-                            if ($mktPrice !== null && is_numeric($mktPrice)) {
-                                return [
-                                    'price' => round((float) $mktPrice, $meta['decimals']),
-                                    'decimals' => $meta['decimals'],
-                                    'source' => 'yahoo_live',
-                                    'updated_at' => gmdate('H:i:s') . ' UTC',
-                                ];
-                            }
+                    if ($resp->ok()) {
+                        $result = $resp->json()['chart']['result'][0] ?? null;
+                        $mktPrice = $result['meta']['regularMarketPrice'] ?? null;
+                        if ($mktPrice !== null && is_numeric($mktPrice)) {
+                            return [
+                                'price' => round((float) $mktPrice, $meta['decimals']),
+                                'decimals' => $meta['decimals'],
+                                'source' => 'yahoo_live',
+                                'updated_at' => gmdate('H:i:s') . ' UTC',
+                            ];
                         }
-                    } catch (\Throwable $e) {
-                        // Fall through
                     }
+                } catch (\Throwable $e) {
+                    // Fallback to base reference price instantly without recursive HTTP requests
                 }
 
-                $fallback = $this->getLatestPrice($meta['pair']);
-
                 return [
-                    'price' => $fallback['price'],
+                    'price' => $meta['base_price'],
                     'decimals' => $meta['decimals'],
-                    'source' => $fallback['source'],
+                    'source' => 'market_base',
                     'updated_at' => gmdate('H:i:s') . ' UTC',
                 ];
             });

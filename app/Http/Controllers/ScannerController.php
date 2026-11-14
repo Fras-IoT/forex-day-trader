@@ -64,15 +64,21 @@ class ScannerController extends Controller
 
     public function livePrices(Request $request, ForexMarketService $market)
     {
+        $statusOnly = $request->boolean('status_only');
         $pairsParam = $request->query('pairs');
-        $pairs = $pairsParam ? array_filter(array_map('trim', explode(',', (string) $pairsParam))) : null;
 
         $heartbeat = \Illuminate\Support\Facades\Cache::get('mt5_bridge_heartbeat');
         $isConnected = $heartbeat && (time() - $heartbeat < 25);
         $tradeAllowed = (bool) \Illuminate\Support\Facades\Cache::get('mt5_trade_allowed', true);
 
+        $quotes = [];
+        if (!$statusOnly && $pairsParam !== 'none') {
+            $pairs = $pairsParam ? array_filter(array_map('trim', explode(',', (string) $pairsParam))) : null;
+            $quotes = $market->getLiveQuotes($pairs);
+        }
+
         return response()->json([
-            'quotes' => $market->getLiveQuotes($pairs),
+            'quotes' => $quotes,
             'server_time' => now()->setTimezone('Asia/Jakarta')->format('H:i:s') . ' WIB',
             'mt5' => [
                 'connected' => (bool) $isConnected,

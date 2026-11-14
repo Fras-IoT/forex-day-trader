@@ -20,11 +20,11 @@ taskkill /f /fi "WINDOWTITLE eq Forex AI - Web Server*" >nul 2>nul
 taskkill /f /fi "WINDOWTITLE eq Forex AI - Auto Monitor*" >nul 2>nul
 taskkill /f /fi "WINDOWTITLE eq Forex AI - Telegram Listener*" >nul 2>nul
 
-set PHP_CLI_SERVER_WORKERS=4
+set PHP_CLI_SERVER_WORKERS=6
 call php artisan config:clear >nul 2>nul
 
-echo [2/4] Menjalankan Web Server (4 Workers)...
-start "Forex AI - Web Server" /min /d "%~dp0" cmd /c "set PHP_CLI_SERVER_WORKERS=4 && php artisan serve --host=127.0.0.1 --port=8000 --no-reload"
+echo [2/4] Menjalankan Web Server (6 Workers)...
+start "Forex AI - Web Server" /min /d "%~dp0" cmd /c "set PHP_CLI_SERVER_WORKERS=6 && php artisan serve --host=127.0.0.1 --port=8000 --no-reload"
 
 echo [3/4] Menjalankan Auto-Monitor & Telegram Listener...
 start "Forex AI - Auto Monitor" /min /d "%~dp0" cmd /c "php artisan schedule:work"

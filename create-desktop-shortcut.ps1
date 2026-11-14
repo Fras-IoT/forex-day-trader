@@ -19,3 +19,4 @@ $ShortcutStop.IconLocation = "$env:SystemRoot\System32\shell32.dll, 27"
 $ShortcutStop.Save()
 
 Write-Host "Shortcut desktop berhasil dibuat di: $DesktopPath" -ForegroundColor Green
+

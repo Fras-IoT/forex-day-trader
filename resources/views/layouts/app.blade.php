@@ -518,9 +518,14 @@
     const pairs = els.length ? [...new Set(els.map(el => el.dataset.livePair))] : [];
     const statusEl = document.getElementById('live-price-status');
 
+    let isPolling = false;
     async function checkMt5AndPrices() {
+        if (isPolling) return;
+        isPolling = true;
         try {
-            const url = '/live-prices' + (pairs.length ? '?pairs=' + encodeURIComponent(pairs.join(',')) : '');
+            const url = pairs.length 
+                ? '/live-prices?pairs=' + encodeURIComponent(pairs.join(','))
+                : '/live-prices?status_only=1';
             const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
             if (!res.ok) return;
             const data = await res.json();
@@ -572,11 +577,13 @@
             }
         } catch (_) {
             // Silent retry
+        } finally {
+            isPolling = false;
         }
     }
 
-    setInterval(checkMt5AndPrices, 4000);
-    setTimeout(checkMt5AndPrices, 800);
+    setTimeout(checkMt5AndPrices, 600);
+    setInterval(checkMt5AndPrices, 5000);
 })();
 </script>
 
