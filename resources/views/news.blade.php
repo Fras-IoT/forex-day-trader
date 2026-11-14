@@ -115,9 +115,55 @@
 <!-- 1. MODEL KALENDER KOTAK-KOTAK INTERAKTIF (MONTH GRID VIEW)     -->
 <!-- ============================================================== -->
 <div class="card" style="margin-bottom: 1.5rem; padding: 1.25rem;">
-    <!-- HEADER NAVIGASI BULAN -->
-    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.75rem; margin-bottom:1rem; padding:0.6rem 0.8rem; background:var(--surface-2); border:1px solid var(--border); border-radius:8px;">
-        <div style="display:flex; align-items:center; gap:0.4rem; flex-wrap:nowrap;">
+    <!-- HEADER NAVIGASI BULAN (GRID 3 KOLOM SEIMBANG: KIRI, TENGAH, KANAN) -->
+    <style>
+        .calendar-nav-toolbar {
+            display: grid;
+            grid-template-columns: 1fr auto 1fr;
+            align-items: center;
+            gap: 0.75rem;
+            margin-bottom: 1rem;
+            padding: 0.6rem 0.8rem;
+            background: var(--surface-2);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+        }
+        .calendar-nav-left {
+            justify-self: start;
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            flex-wrap: nowrap;
+        }
+        .calendar-nav-center {
+            justify-self: center;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            flex-wrap: nowrap;
+        }
+        .calendar-nav-right {
+            justify-self: end;
+            font-size: 0.84rem;
+            white-space: nowrap;
+        }
+        @media (max-width: 860px) {
+            .calendar-nav-toolbar {
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                gap: 0.75rem;
+            }
+            .calendar-nav-left, .calendar-nav-center, .calendar-nav-right {
+                justify-self: center;
+                justify-content: center;
+            }
+        }
+    </style>
+
+    <div class="calendar-nav-toolbar">
+        <div class="calendar-nav-left">
             <a href="{{ route('news.index', array_merge(request()->query(), ['view' => 'calendar', 'year' => $prevYear, 'month' => $prevMonth])) }}" class="btn btn-sm" title="Geser ke Bulan Sebelumnya" style="white-space:nowrap;">
                 &larr; Bulan Lalu
             </a>
@@ -129,9 +175,9 @@
             </a>
         </div>
 
-        <div style="display:flex; align-items:center; gap:0.5rem; flex-wrap:nowrap;">
+        <div class="calendar-nav-center">
             <span style="font-size:1.35rem; line-height:1;">📅</span>
-            <!-- Dropdown Bulan sekaligus Penamaan Judul Kalender -->
+            <!-- Dropdown Bulan sekaligus Penamaan Judul Kalender (Posisi Tepat di Tengah) -->
             <select onchange="window.location.href=this.value" style="padding:0.4rem 0.85rem; font-size:1.15rem; font-weight:800; border-radius:8px; border:1.5px solid var(--border); background:var(--surface); color:var(--text); cursor:pointer; box-shadow:0 1px 2px rgba(0,0,0,0.05); outline:none; white-space:nowrap;" title="Pilih Bulan &amp; Tahun Kalender">
                 @foreach($availableMonths as $am)
                     <option value="{{ route('news.index', array_merge(request()->query(), ['view' => 'calendar', 'year' => $am['year'], 'month' => $am['month']])) }}" {{ $am['is_current'] ? 'selected' : '' }}>
@@ -141,7 +187,7 @@
             </select>
         </div>
 
-        <div style="font-size:0.84rem; white-space:nowrap;">
+        <div class="calendar-nav-right">
             <span class="badge badge-brand">{{ $monthEventsCount }} Event di Bulan Ini</span>
         </div>
     </div>
