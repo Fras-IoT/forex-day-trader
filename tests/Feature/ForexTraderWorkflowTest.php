@@ -239,5 +239,37 @@ class ForexTraderWorkflowTest extends TestCase
         $this->assertFalse($res['ok']);
         $this->assertNotEmpty($res['error']);
     }
+
+    public function test_macro_news_analysis_displays_only_selected_pair(): void
+    {
+        // Setup two distinct briefs for different pairs
+        \App\Models\NewsBrief::create([
+            'pair' => 'GBP/USD',
+            'impact_level' => 'High',
+            'bias' => 'Bearish',
+            'ai_brief' => 'GBP Macro Analysis Only',
+            'headlines' => [['title' => 'UK Retail Sales Dropped', 'published' => '10:00', 'source' => 'Market Feed']],
+        ]);
+
+        \App\Models\NewsBrief::create([
+            'pair' => 'EUR/USD',
+            'impact_level' => 'Medium',
+            'bias' => 'Bullish',
+            'ai_brief' => 'EUR Macro Analysis Only',
+            'headlines' => [['title' => 'ECB Keeps Rate Steady', 'published' => '11:00', 'source' => 'Market Feed']],
+        ]);
+
+        // When requesting EUR/USD: only EUR/USD brief should appear in view, NOT GBP/USD
+        $respEur = $this->get('/news?pair=EUR/USD');
+        $respEur->assertStatus(200);
+        $respEur->assertSee('EUR Macro Analysis Only');
+        $respEur->assertDontSee('GBP Macro Analysis Only');
+
+        // When requesting GBP/USD: only GBP/USD brief should appear in view, NOT EUR/USD
+        $respGbp = $this->get('/news?pair=GBP/USD');
+        $respGbp->assertStatus(200);
+        $respGbp->assertSee('GBP Macro Analysis Only');
+        $respGbp->assertDontSee('EUR Macro Analysis Only');
+    }
 }
 

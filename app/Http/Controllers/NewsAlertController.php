@@ -17,9 +17,17 @@ class NewsAlertController extends Controller
 {
     public function news(Request $request, GeminiService $gemini)
     {
-        $briefs = NewsBrief::orderBy('created_at', 'desc')->take(10)->get();
         $pairs = array_keys(ForexMarketService::PAIRS);
         $settings = TraderSetting::current();
+
+        $selectedPair = strtoupper(trim((string) $request->query('pair', 'EUR/USD')));
+        if (!in_array($selectedPair, $pairs, true)) {
+            $selectedPair = 'EUR/USD';
+        }
+
+        // Ambil hanya 1 analisis makro terbaru khusus untuk pair yang dipilih user
+        $latestBrief = NewsBrief::where('pair', $selectedPair)->orderBy('created_at', 'desc')->first();
+        $briefs = $latestBrief ? collect([$latestBrief]) : collect();
 
         $selectedCurrency = strtoupper(trim((string) $request->query('currency', 'ALL')));
         $selectedImpact = strtoupper(trim((string) $request->query('impact', 'ALL')));
@@ -184,6 +192,8 @@ class NewsAlertController extends Controller
 
         return view('news', [
             'briefs' => $briefs,
+            'latestBrief' => $latestBrief,
+            'selectedPair' => $selectedPair,
             'pairs' => $pairs,
             'geminiConfigured' => $gemini->isConfigured(),
             'events' => $events,
@@ -222,10 +232,27 @@ class NewsAlertController extends Controller
 
     public function fetchNews(Request $request, ForexNewsService $newsService)
     {
-        $pair = $request->input('pair', 'EUR/USD');
+        $pair = strtoupper(trim((string) $request->input('pair', 'EUR/USD')));
         $brief = $newsService->fetchAndAnalyze($pair);
 
-        return redirect()->route('news.index')
+        $params = ['pair' => $brief->pair];
+        if ($request->filled('view')) {
+            $params['view'] = $request->input('view');
+        }
+        if ($request->filled('year')) {
+            $params['year'] = $request->input('year');
+        }
+        if ($request->filled('month')) {
+            $params['month'] = $request->input('month');
+        }
+        if ($request->filled('currency')) {
+            $params['currency'] = $request->input('currency');
+        }
+        if ($request->filled('impact')) {
+            $params['impact'] = $request->input('impact');
+        }
+
+        return redirect()->route('news.index', $params)
             ->with('status', "Berita & analisis makro untuk {$brief->pair} berhasil diperbarui.");
     }
 

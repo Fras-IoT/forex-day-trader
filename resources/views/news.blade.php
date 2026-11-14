@@ -507,47 +507,97 @@
 
 <!-- ANALISIS MAKRO PER PASANGAN MATA UANG (GEMINI AI) -->
 <div class="card" style="margin-bottom: 1rem;">
-    <h2>Analisis Makro &amp; Sentimen Berita (Gemini AI)</h2>
-    <p class="muted">Pilih pasangan mata uang untuk mengambil headline berita terkini dan ringkasan sentimen makro dari Gemini AI.</p>
-    <form method="POST" action="{{ route('news.fetch') }}" style="display:flex; gap:0.5rem; flex-wrap:wrap; align-items:end;">
+    <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:1rem;">
+        <div>
+            <h2 style="margin:0 0 0.35rem 0;">Analisis Makro &amp; Sentimen Berita (Gemini AI)</h2>
+            <p class="muted" style="margin:0;">Pilih pasangan mata uang untuk menampilkan ringkasan sentimen makro dan headline berita khusus pair tersebut.</p>
+        </div>
+        @if($latestBrief)
+            <span class="badge badge-brand" style="font-size:0.85rem; padding:0.35rem 0.65rem;">
+                Terakhir Dianalisis: {{ \Carbon\Carbon::parse($latestBrief->created_at)->setTimezone('Asia/Jakarta')->format('d M Y H:i') }} WIB
+            </span>
+        @endif
+    </div>
+
+    <form method="POST" action="{{ route('news.fetch') }}" style="display:flex; gap:0.75rem; flex-wrap:wrap; align-items:end; margin-top:1.25rem;">
         @csrf
-        <div style="min-width:180px;">
-            <label for="pair">Currency Pair</label>
-            <select id="pair" name="pair">
+        <input type="hidden" name="view" value="{{ $viewMode }}">
+        <input type="hidden" name="year" value="{{ $year }}">
+        <input type="hidden" name="month" value="{{ $month }}">
+        <input type="hidden" name="currency" value="{{ $selectedCurrency }}">
+        <input type="hidden" name="impact" value="{{ $selectedImpact }}">
+
+        <div style="min-width:200px;">
+            <label for="pair" style="font-weight:600; font-size:0.85rem; margin-bottom:0.35rem; display:block;">Pilih Pasangan Mata Uang</label>
+            <select id="pair" name="pair" onchange="window.location.href='{{ route('news.index') }}?pair=' + encodeURIComponent(this.value) + '&currency={{ $selectedCurrency }}&impact={{ $selectedImpact }}&timeframe={{ $selectedTimeframe }}&year={{ $year }}&month={{ $month }}&view={{ $viewMode }}'">
                 @foreach($pairs as $p)
-                    <option value="{{ $p }}">{{ $p }}</option>
+                    <option value="{{ $p }}" {{ $selectedPair === $p ? 'selected' : '' }}>{{ $p }}</option>
                 @endforeach
             </select>
         </div>
-        <button class="btn btn-primary" type="submit">Ambil Berita &amp; Analisis Gemini</button>
+        <button class="btn btn-primary" type="submit" id="btn-fetch-gemini">
+            🔄 Ambil Berita &amp; Analisis Gemini untuk {{ $selectedPair }}
+        </button>
     </form>
 </div>
 
-@foreach($briefs as $b)
-<div class="card" style="margin-bottom: 1rem;">
-    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem; margin-bottom:0.5rem;">
-        <h3 style="margin:0;">{{ $b->pair }}</h3>
-        <div style="display:flex; gap:0.4rem;">
-            <span class="badge badge-brand">Impact: {{ $b->impact_level }}</span>
-            <span class="badge {{ $b->bias === 'Bullish' ? 'badge-green' : ($b->bias === 'Bearish' ? 'badge-red' : '') }}">Bias: {{ $b->bias }}</span>
+@if($latestBrief)
+<div class="card" style="margin-bottom: 1rem; border-left: 4px solid var(--brand, #2563eb);">
+    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem; margin-bottom:0.75rem;">
+        <div style="display:flex; align-items:center; gap:0.6rem;">
+            <h3 style="margin:0; font-size:1.3rem;">{{ $latestBrief->pair }}</h3>
+            <span class="badge {{ $latestBrief->bias === 'Bullish' ? 'badge-green' : ($latestBrief->bias === 'Bearish' ? 'badge-red' : '') }}" style="font-weight:700;">
+                Bias: {{ $latestBrief->bias }}
+            </span>
+            <span class="badge badge-brand">Impact: {{ $latestBrief->impact_level }}</span>
         </div>
+        <span class="muted" style="font-size:0.82rem;">
+            Waktu Analisis: {{ \Carbon\Carbon::parse($latestBrief->created_at)->setTimezone('Asia/Jakarta')->format('d M Y H:i:s') }} WIB
+        </span>
     </div>
 
-    @if($b->ai_brief)
-        <div class="ai-box" style="margin-bottom:0.75rem;">{!! \App\Services\GeminiService::toHtml($b->ai_brief) !!}</div>
+    @if($latestBrief->ai_brief)
+        <div class="ai-box" style="margin-bottom:1rem; line-height:1.6;">
+            {!! \App\Services\GeminiService::toHtml($latestBrief->ai_brief) !!}
+        </div>
     @elseif(!$geminiConfigured)
-        <div class="muted" style="margin-bottom:0.75rem;"><em>Ringkasan AI tidak aktif (Gemini token belum diisi di Settings).</em></div>
+        <div class="muted" style="margin-bottom:1rem;"><em>Ringkasan AI tidak aktif (Gemini token belum diisi di Settings).</em></div>
     @endif
 
-    <ul style="margin:0; padding-left:1.2rem;">
-        @foreach(($b->headlines ?? []) as $h)
-            <li style="margin-bottom:0.35rem;">
-                <span class="muted mono">[{{ $h['published'] }}]</span>
-                <strong>{{ $h['title'] }}</strong>
-                <span class="muted">({{ str_replace('Yahoo Finance FX', 'Market News Feed', $h['source'] ?? '') }})</span>
-            </li>
-        @endforeach
-    </ul>
+    <div style="margin-top:0.75rem;">
+        <h4 style="margin:0 0 0.5rem 0; font-size:0.95rem; color:#4b5563;">Headline Berita Pasar Terkini ({{ $latestBrief->pair }}):</h4>
+        <ul style="margin:0; padding-left:1.2rem;">
+            @forelse(($latestBrief->headlines ?? []) as $h)
+                <li style="margin-bottom:0.4rem;">
+                    <span class="muted mono">[{{ $h['published'] ?? '-' }}]</span>
+                    <strong>{{ $h['title'] ?? '-' }}</strong>
+                    <span class="muted">({{ str_replace('Yahoo Finance FX', 'Market News Feed', $h['source'] ?? 'Market Feed') }})</span>
+                </li>
+            @empty
+                <li class="muted">Tidak ada headline berita spesifik yang ditemukan untuk pair ini saat ini.</li>
+            @endforelse
+        </ul>
+    </div>
 </div>
-@endforeach
+@else
+<div class="card" style="margin-bottom: 1rem; text-align:center; padding: 2.5rem 1rem; background: #fafafa; border: 1px dashed #cbd5e1;">
+    <div style="font-size: 2.2rem; margin-bottom: 0.5rem;">📰</div>
+    <h3 style="margin:0 0 0.5rem 0; color:#374151;">Belum Ada Analisis Makro untuk {{ $selectedPair }}</h3>
+    <p class="muted" style="max-width: 520px; margin: 0 auto 1.25rem auto; font-size:0.92rem;">
+        Database belum memiliki data analisis sentimen Gemini AI untuk pasangan mata uang <strong>{{ $selectedPair }}</strong>.
+    </p>
+    <form method="POST" action="{{ route('news.fetch') }}" style="display:inline-block;">
+        @csrf
+        <input type="hidden" name="pair" value="{{ $selectedPair }}">
+        <input type="hidden" name="view" value="{{ $viewMode }}">
+        <input type="hidden" name="year" value="{{ $year }}">
+        <input type="hidden" name="month" value="{{ $month }}">
+        <input type="hidden" name="currency" value="{{ $selectedCurrency }}">
+        <input type="hidden" name="impact" value="{{ $selectedImpact }}">
+        <button class="btn btn-primary" type="submit">
+            Ambil Berita &amp; Analisis Gemini untuk {{ $selectedPair }} Sekarang
+        </button>
+    </form>
+</div>
+@endif
 @endsection
