@@ -92,48 +92,4 @@ jobs:
           ignore-unfixed: true
           severity: CRITICAL,HIGH
 
-  deploy:
-    name: Deploy to VPS (72.62.126.151)
-    needs: [test, security]
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Deploy via SSH & Docker Compose
-        env:
-          VPS_HOST: ${{ secrets.VPS_HOST || '72.62.126.151' }}
-          VPS_USER: ${{ secrets.VPS_USER || 'frastio' }}
-          VPS_PORT: ${{ secrets.VPS_PORT || '22' }}
-          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
-          VPS_APP_DIR: ${{ secrets.VPS_APP_DIR || '/home/frastio/forex-day-trader' }}
-        run: |
-          if [ -z "$VPS_SSH_KEY" ]; then
-            echo "VPS_SSH_KEY secret belum diatur. Melewati auto-deploy."
-            exit 0
-          fi
-
-          mkdir -p ~/.ssh
-          printf '%s\n' "$VPS_SSH_KEY" | tr -d '\r' > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
-
-          ssh -T -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no -p "$VPS_PORT" "${VPS_USER}@${VPS_HOST}" << EOF
-            set -e
-            APP_DIR="$VPS_APP_DIR"
-            if [ ! -d "\$APP_DIR/.git" ]; then
-              for d in /var/www/forex-day-trader "\$HOME/forex-day-trader" /opt/forex-day-trader /srv/forex-day-trader; do
-                if [ -d "\$d/.git" ]; then
-                  APP_DIR="\$d"
-                  break
-                fi
-              done
-            fi
-            if [ ! -d "\$APP_DIR/.git" ]; then
-              APP_DIR=\$(find /var /home /opt /srv -maxdepth 4 -type d -name "forex-day-trader" 2>/dev/null | head -n 1)
-            fi
-            echo "Deploying in: \$APP_DIR"
-            cd "\$APP_DIR"
-            git pull origin main
-            docker compose up -d --build
-            docker image prune -f
-          EOF
 
