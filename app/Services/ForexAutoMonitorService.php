@@ -178,7 +178,10 @@ class ForexAutoMonitorService
             // Ambil harga real-time (prioritas MT5 Finex Live) untuk pair dengan score > 70
             $spot = $this->market->getLatestPrice($pair, true);
             $entry = (float) ($spot['price'] ?? $hit['price']);
-            $priceSource = $spot['source'] ?? 'yahoo_live';
+            $feedLabel = match ($spot['source'] ?? '') {
+                'mt5_finex_live' => 'MT5 Finex Live',
+                default => 'MT5 Finex Feed',
+            };
 
             $atrPrice = max($meta['pip'] * 5, ((float) ($hit['atr_pips'] ?? 10)) * $meta['pip']);
             $minAtrRisk = $atrPrice * 2.5;
@@ -253,6 +256,46 @@ class ForexAutoMonitorService
                     'expires_at' => now()->addMinutes(15),
                 ]);
 
+                // Sinkronisasikan langsung ke PaperOrder agar order tercatat di web app (Open / Pending Positions)
+                $paperOrder = PaperOrder::create([
+                    'pair' => $pair,
+                    'side' => $side,
+                    'order_type' => 'market',
+                    'lots' => $lots,
+                    'units' => (int) round($lots * 100000),
+                    'pip_value_usd' => $pipValueStd,
+                    'entry_price' => $entry,
+                    'stop_loss' => $stop,
+                    'take_profit' => $target,
+                    'max_loss_usd' => $maxLossUsd,
+                    'reward_risk' => (float) $mc['expected_r'],
+                    'risk_status' => 'PASS',
+                    'paper' => false,
+                    'status' => $isAuto ? 'open' : 'pending_approval',
+                    'mt5_order_id' => (string) $mt5Order->_id,
+                    'executed_at' => $isAuto ? now() : null,
+                ]);
+
+                $mt5Order->paper_order_id = (string) $paperOrder->_id;
+                $mt5Order->save();
+
+                if ($isAuto) {
+                    PriceAlert::create([
+                        'pair' => $pair,
+                        'condition' => $side === 'buy' ? 'below' : 'above',
+                        'target_price' => $stop,
+                        'label' => "Stop Loss ({$pair} {$side})",
+                        'status' => 'active',
+                    ]);
+                    PriceAlert::create([
+                        'pair' => $pair,
+                        'condition' => $side === 'buy' ? 'above' : 'below',
+                        'target_price' => $target,
+                        'label' => "Take Profit ({$pair} {$side})",
+                        'status' => 'active',
+                    ]);
+                }
+
                 $kzTag = !empty($hit['killzone']) ? ' | Killzone ✓' : '';
 
                 if ($isAuto) {
@@ -264,7 +307,7 @@ class ForexAutoMonitorService
                         . "Entry: <code>{$entry}</code> | SL: <code>{$stop}</code> | TP: <code>{$target}</code>\n"
                         . "Ukuran Lot: <b>{$lots} lot</b> (Max Risk \${$maxLossUsd})\n"
                         . "Status: <b>Langsung Diteruskan ke MT5 Finex (Tanpa Menunggu Persetujuan)</b>\n"
-                        . "<i>Sesi: {$scan->session} | Feed: {$priceSource} | Mode: AUTO TRADING</i>";
+                        . "<i>Sesi: {$scan->session} | Feed: {$feedLabel} | Mode: AUTO TRADING</i>";
 
                     $sent = $this->telegram->sendMessage($msg);
                 } else {
@@ -281,7 +324,7 @@ class ForexAutoMonitorService
                         . "Ukuran Lot: <b>{$lots} lot</b> (Max Risk \${$maxLossUsd})\n"
                         . $newsWarning
                         . "Status: <b>Menunggu Persetujuan Anda di Telegram</b>\n"
-                        . "<i>Sesi: {$scan->session} | Feed: {$priceSource} | Berlaku 15 menit</i>";
+                        . "<i>Sesi: {$scan->session} | Feed: {$feedLabel} | Berlaku 15 menit</i>";
 
                     $buttons = [[
                         ['text' => "✅ SETUJUI ENTRY ({$lots} lot)", 'callback_data' => "mt5_approve:{$mt5Order->_id}"],
@@ -391,6 +434,9 @@ class ForexAutoMonitorService
                     if ($order->expires_at && $order->expires_at->isPast()) {
                         $order->status = 'expired';
                         $order->save();
+                        if (!empty($order->paper_order_id)) {
+                            PaperOrder::where('_id', $order->paper_order_id)->update(['status' => 'rejected']);
+                        }
                         $this->telegram->answerCallbackQuery($cbId, 'Sinyal sudah kedaluwarsa (>15 menit).', true);
                         $this->telegram->sendMessage("⏰ <b>Kedaluwarsa:</b> Sinyal {$order->pair} (" . strtoupper($order->side) . ") melewati batas 15 menit dan dibatalkan.");
                         continue;
@@ -401,12 +447,39 @@ class ForexAutoMonitorService
                     $order->save();
                     $processed++;
 
+                    // Sinkronkan ke PaperOrder agar masuk ke Open Positions
+                    $paper = !empty($order->paper_order_id) ? PaperOrder::find($order->paper_order_id) : PaperOrder::where('mt5_order_id', (string) $order->_id)->first();
+                    if ($paper) {
+                        $paper->status = 'open';
+                        $paper->executed_at = now();
+                        $paper->save();
+                    }
+
+                    PriceAlert::create([
+                        'pair' => $order->pair,
+                        'condition' => $order->side === 'buy' ? 'below' : 'above',
+                        'target_price' => (float) $order->stop_loss,
+                        'label' => "Stop Loss ({$order->pair} {$order->side})",
+                        'status' => 'active',
+                    ]);
+                    PriceAlert::create([
+                        'pair' => $order->pair,
+                        'condition' => $order->side === 'buy' ? 'above' : 'below',
+                        'target_price' => (float) $order->take_profit,
+                        'label' => "Take Profit ({$order->pair} {$order->side})",
+                        'status' => 'active',
+                    ]);
+
                     $this->telegram->answerCallbackQuery($cbId, "✅ Disetujui! Order {$order->pair} diteruskan ke MT5 Finex.", true);
                     $this->telegram->sendMessage("⏳ <b>DISETUJUI DI TELEGRAM:</b>\nPair: <b>{$order->pair} (" . strtoupper($order->side) . ")</b> | {$order->lots} lot\nStatus: <b>Diteruskan ke Robot MT5 (Akan open posisi otomatis)</b>");
                 } elseif ($action === 'mt5_reject') {
                     $order->status = 'rejected';
                     $order->save();
                     $processed++;
+
+                    if (!empty($order->paper_order_id)) {
+                        PaperOrder::where('_id', $order->paper_order_id)->update(['status' => 'rejected']);
+                    }
 
                     $this->telegram->answerCallbackQuery($cbId, 'Order ditolak & dibatalkan.', true);
                     $this->telegram->sendMessage("❌ <b>DITOLAK:</b> Setup {$order->pair} (" . strtoupper($order->side) . ") dibatalkan.");

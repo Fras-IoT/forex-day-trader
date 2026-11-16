@@ -62,6 +62,44 @@ void OnDeinit(const int reason)
 }
 
 //+------------------------------------------------------------------+
+string BuildPositionsPayload()
+{
+   string p = "[";
+   bool first = true;
+   int total = PositionsTotal();
+   for(int i = 0; i < total; i++)
+   {
+      ulong ticket = PositionGetTicket(i);
+      if(ticket > 0)
+      {
+         string sym = PositionGetString(POSITION_SYMBOL);
+         long type = PositionGetInteger(POSITION_TYPE);
+         double vol = PositionGetDouble(POSITION_VOLUME);
+         double openPx = PositionGetDouble(POSITION_PRICE_OPEN);
+         double curPx = PositionGetDouble(POSITION_PRICE_CURRENT);
+         double sl = PositionGetDouble(POSITION_SL);
+         double tp = PositionGetDouble(POSITION_TP);
+         double profit = PositionGetDouble(POSITION_PROFIT);
+         int digits = (int)SymbolInfoInteger(sym, SYMBOL_DIGITS);
+
+         if(!first) p += ",";
+         p += "{\"ticket\":\"" + IntegerToString((long)ticket) + "\",";
+         p += "\"symbol\":\"" + sym + "\",";
+         p += "\"side\":\"" + (type == POSITION_TYPE_BUY ? "buy" : "sell") + "\",";
+         p += "\"volume\":" + DoubleToString(vol, 2) + ",";
+         p += "\"open_price\":" + DoubleToString(openPx, digits) + ",";
+         p += "\"current_price\":" + DoubleToString(curPx, digits) + ",";
+         p += "\"sl\":" + DoubleToString(sl, digits) + ",";
+         p += "\"tp\":" + DoubleToString(tp, digits) + ",";
+         p += "\"profit\":" + DoubleToString(profit, 2) + "}";
+         first = false;
+      }
+   }
+   p += "]";
+   return p;
+}
+
+//+------------------------------------------------------------------+
 string BuildQuotesPayload()
 {
    string pairs[] = {"EURUSD", "GBPUSD", "USDJPY", "AUDUSD", "USDCHF", "USDCAD", "NZDUSD", "EURGBP", "EURJPY", "GBPJPY", "XAUUSD"};
@@ -90,7 +128,7 @@ string BuildQuotesPayload()
    q += "}";
 
    string algo = TerminalInfoInteger(TERMINAL_TRADE_ALLOWED) ? "true" : "false";
-   string payload = "{\"token\":\"" + InpBridgeToken + "\",\"trade_allowed\":" + algo + ",\"quotes\":" + q + "}";
+   string payload = "{\"token\":\"" + InpBridgeToken + "\",\"trade_allowed\":" + algo + ",\"quotes\":" + q + ",\"positions\":" + BuildPositionsPayload() + "}";
    return payload;
 }
 
@@ -116,6 +154,9 @@ void OnTimer()
    }
 
    string json = CharArrayToString(result, 0, WHOLE_ARRAY, CP_UTF8);
+
+   // Proses permintaan close posisi dari Web App jika ada
+   ProcessCloseTickets(json);
 
    // Hanya eksekusi posisi jika fitur eksekusi aktif dan tombol Algo Trading MT5 menyala
    if(!InpAutoExecute || !TerminalInfoInteger(TERMINAL_TRADE_ALLOWED))
@@ -166,6 +207,35 @@ void ProcessOrdersJson(const string &json)
       {
          RememberExecutedOrder(id);
          ExecuteApprovedOrder(id, symbol, side, lots, sl, tp);
+      }
+   }
+}
+
+//+------------------------------------------------------------------+
+void ProcessCloseTickets(const string &json)
+{
+   int pos = StringFind(json, "\"close_tickets\":[");
+   if(pos < 0) return;
+   pos += 17;
+   int end = StringFind(json, "]", pos);
+   if(end < 0) return;
+   string list = StringSubstr(json, pos, end - pos);
+   if(StringLen(list) == 0) return;
+
+   int curr = 0;
+   while(curr < StringLen(list))
+   {
+      int q1 = StringFind(list, "\"", curr);
+      if(q1 < 0) break;
+      int q2 = StringFind(list, "\"", q1 + 1);
+      if(q2 < 0) break;
+      string ticketStr = StringSubstr(list, q1 + 1, q2 - q1 - 1);
+      curr = q2 + 1;
+      ulong ticket = (ulong)StringToInteger(ticketStr);
+      if(ticket > 0)
+      {
+         Print("Menutup posisi MT5 sesuai permintaan dari Web App: Ticket #", ticket);
+         trade.PositionClose(ticket);
       }
    }
 }

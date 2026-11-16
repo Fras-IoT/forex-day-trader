@@ -271,5 +271,56 @@ class ForexTraderWorkflowTest extends TestCase
         $respGbp->assertSee('GBP Macro Analysis Only');
         $respGbp->assertDontSee('EUR Macro Analysis Only');
     }
+
+    public function test_mt5_auto_trading_syncs_to_paper_orders(): void
+    {
+        $settings = \App\Models\TraderSetting::current();
+        $settings->mt5_bridge_token = 'test_token_123';
+        $settings->save();
+        $token = 'test_token_123';
+
+        // 1. Simulate MT5 order created
+        $mt5Order = \App\Models\Mt5Order::create([
+            'pair' => 'USD/CAD',
+            'mt5_symbol' => 'USDCAD',
+            'side' => 'sell',
+            'lots' => 0.82,
+            'entry_price' => 1.42792,
+            'stop_loss' => 1.42932,
+            'take_profit' => 1.42582,
+            'setup' => '20D Breakout',
+            'score' => 80,
+            'expected_r' => 0.261,
+            'target_first_pct' => 46.2,
+            'status' => 'approved',
+        ]);
+
+        // 2. MT5 EA reports executed
+        $response = $this->postJson('/api/mt5/report?token=' . $token, [
+            'id' => (string) $mt5Order->_id,
+            'status' => 'executed',
+            'ticket' => '99887766',
+            'executed_price' => 1.42790,
+        ]);
+        $response->assertOk();
+
+        // Assert PaperOrder is automatically created and appears in Open Positions!
+        $paper = \App\Models\PaperOrder::where('mt5_ticket', '99887766')->first();
+        $this->assertNotNull($paper);
+        $this->assertEquals('USD/CAD', $paper->pair);
+        $this->assertEquals('open', $paper->status);
+        $this->assertEquals(0.82, (float) $paper->lots);
+        $this->assertEquals(1.42790, (float) $paper->entry_price);
+
+        // 3. Web dashboard displays open position
+        $respDash = $this->get('/broker');
+        $respDash->assertStatus(200);
+        $respDash->assertSee('USD/CAD');
+        $respDash->assertSee('0.82');
+
+        // Cleanup
+        $paper->delete();
+        $mt5Order->delete();
+    }
 }
 

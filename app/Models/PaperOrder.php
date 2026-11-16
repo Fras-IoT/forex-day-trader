@@ -30,6 +30,8 @@ class PaperOrder extends Model
         'close_price',
         'pnl_usd',
         'pnl_pips',
+        'mt5_ticket',
+        'mt5_order_id',
         'executed_at',
         'closed_at',
     ];

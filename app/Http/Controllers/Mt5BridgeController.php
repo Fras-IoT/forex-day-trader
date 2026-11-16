@@ -3,8 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Models\Mt5Order;
+use App\Models\PaperOrder;
 use App\Models\TraderSetting;
 use App\Services\ForexAutoMonitorService;
+use App\Services\ForexMarketService;
 use App\Services\TelegramService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -124,9 +126,67 @@ class Mt5BridgeController extends Controller
             $raw->save();
         }
 
+        // Sinkronisasi posisi aktif yang dilaporkan langsung dari terminal MT5
+        $reportedPositions = $request->input('positions');
+        if (is_array($reportedPositions)) {
+            $activeTickets = [];
+            foreach ($reportedPositions as $p) {
+                $t = trim((string) ($p['ticket'] ?? ''));
+                if ($t !== '') {
+                    $activeTickets[] = $t;
+                }
+            }
+            Cache::put('mt5_active_positions', $reportedPositions, 30);
+
+            // Periksa posisi PaperOrder ber-tiket MT5 yang statusnya masih 'open'
+            // Jika tiketnya sudah tidak ada di terminal MT5, tandai bahwa order sudah ditutup
+            $openMt5Orders = PaperOrder::where('status', 'open')
+                ->whereNotNull('mt5_ticket')
+                ->where('mt5_ticket', '!=', '')
+                ->get();
+
+            foreach ($openMt5Orders as $pOrder) {
+                if (!in_array((string) $pOrder->mt5_ticket, $activeTickets, true)) {
+                    $market = app(ForexMarketService::class);
+                    $latestPx = $market->getLatestPrice($pOrder->pair, true);
+                    $closePx = (float) ($latestPx['price'] ?? $pOrder->entry_price);
+
+                    $meta = $market->getPairMeta($pOrder->pair);
+                    $entry = (float) $pOrder->entry_price;
+                    $diff = $pOrder->side === 'buy' ? ($closePx - $entry) : ($entry - $closePx);
+                    $pips = round($diff / $meta['pip'], 1);
+                    $pnlUsd = round($pips * (float) $pOrder->pip_value_usd, 2);
+
+                    $pOrder->status = 'closed';
+                    $pOrder->close_price = $closePx;
+                    $pOrder->pnl_pips = $pips;
+                    $pOrder->pnl_usd = $pnlUsd;
+                    $pOrder->closed_at = now();
+                    $pOrder->save();
+
+                    try {
+                        $tg = app(TelegramService::class);
+                        if ($tg->isConfigured()) {
+                            $sign = $pnlUsd >= 0 ? '+' : '';
+                            $tg->sendMessage(
+                                "🔒 <b>POSISI MT5 TELAH DITUTUP</b>\n"
+                                . "Ticket: <code>#{$pOrder->mt5_ticket}</code>\n"
+                                . "Pair: <b>{$pOrder->pair} (" . strtoupper($pOrder->side) . ")</b> | {$pOrder->lots} lot\n"
+                                . "Entry: <code>{$entry}</code> → Close: <code>{$closePx}</code>\n"
+                                . "PnL: <b>{$sign}{$pips} pips ({$sign}\${$pnlUsd})</b>"
+                            );
+                        }
+                    } catch (\Throwable $e) {}
+                }
+            }
+        }
+
+        $closeTickets = (array) Cache::pull('mt5_tickets_to_close', []);
+
         return response()->json([
             'ok' => true,
             'orders' => $orders,
+            'close_tickets' => array_values($closeTickets),
         ]);
     }
 
@@ -158,6 +218,52 @@ class Mt5BridgeController extends Controller
         $order->error_message = $data['error_message'] ?? null;
         $order->executed_at = now();
         $order->save();
+
+        // Sinkronisasi otomatis ke PaperOrder agar order muncul di dashboard web app
+        $paperOrder = !empty($order->paper_order_id)
+            ? PaperOrder::find($order->paper_order_id)
+            : PaperOrder::where('mt5_order_id', (string) $order->_id)->first();
+
+        $px = $order->executed_price ?? $order->entry_price;
+
+        if ($data['status'] === 'executed') {
+            if ($paperOrder) {
+                $paperOrder->status = 'open';
+                $paperOrder->entry_price = $px;
+                $paperOrder->mt5_ticket = (string) $order->mt5_ticket;
+                $paperOrder->executed_at = now();
+                $paperOrder->save();
+            } else {
+                $market = app(ForexMarketService::class);
+                $pipVal = max(0.1, $market->pipValuePerStandardLot($order->pair, $px));
+                $paperOrder = PaperOrder::create([
+                    'pair' => $order->pair,
+                    'side' => $order->side,
+                    'order_type' => 'market',
+                    'lots' => (float) $order->lots,
+                    'units' => (int) round($order->lots * 100000),
+                    'pip_value_usd' => $pipVal,
+                    'entry_price' => $px,
+                    'stop_loss' => (float) $order->stop_loss,
+                    'take_profit' => (float) $order->take_profit,
+                    'max_loss_usd' => 80.0,
+                    'reward_risk' => (float) ($order->expected_r ?? 1.5),
+                    'risk_status' => 'PASS',
+                    'paper' => false,
+                    'status' => 'open',
+                    'mt5_order_id' => (string) $order->_id,
+                    'mt5_ticket' => (string) $order->mt5_ticket,
+                    'executed_at' => now(),
+                ]);
+                $order->paper_order_id = (string) $paperOrder->_id;
+                $order->save();
+            }
+        } elseif ($data['status'] === 'failed') {
+            if ($paperOrder) {
+                $paperOrder->status = 'rejected';
+                $paperOrder->save();
+            }
+        }
 
         if ($telegram->isConfigured()) {
             if ($data['status'] === 'executed') {

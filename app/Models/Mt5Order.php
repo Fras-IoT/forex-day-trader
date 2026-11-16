@@ -23,6 +23,7 @@ class Mt5Order extends Model
         'target_first_pct',
         'status',
         'telegram_message_id',
+        'paper_order_id',
         'mt5_ticket',
         'executed_price',
         'error_message',

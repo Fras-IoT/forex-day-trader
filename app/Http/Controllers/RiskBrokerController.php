@@ -183,6 +183,12 @@ class RiskBrokerController extends Controller
         $order->closed_at = now();
         $order->save();
 
+        if (!empty($order->mt5_ticket)) {
+            $toClose = (array) \Illuminate\Support\Facades\Cache::get('mt5_tickets_to_close', []);
+            $toClose[] = (string) $order->mt5_ticket;
+            \Illuminate\Support\Facades\Cache::put('mt5_tickets_to_close', array_unique($toClose), 120);
+        }
+
         return redirect()->route('broker.index')
             ->with('status', "Posisi {$order->pair} ditutup @ {$closePrice} (PnL: {$pips} pips / \${$pnlUsd}).");
     }

@@ -88,7 +88,7 @@ class ForexMarketService
                         if ($result && !empty($result['timestamp'])) {
                             $bars = $this->parseYahooBars($result);
                             if (count($bars) >= 30) {
-                                return ['source' => 'yahoo_live', 'bars' => $bars];
+                                return ['source' => 'mt5_market_feed', 'bars' => $bars];
                             }
                         }
                     }
@@ -189,7 +189,7 @@ class ForexMarketService
                             return [
                                 'price' => round((float) $mktPrice, $meta['decimals']),
                                 'decimals' => $meta['decimals'],
-                                'source' => 'yahoo_live',
+                                'source' => 'mt5_market_feed',
                                 'updated_at' => gmdate('H:i:s') . ' UTC',
                             ];
                         }
